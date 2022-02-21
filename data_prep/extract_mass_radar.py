@@ -1,4 +1,12 @@
 #!/usr/bin/env python
+'''
+This script extracts radar data from the Met Office MASS data archive for particular period. In then selects the particular radar products of interest and then aggregates the data into 1 day of data per file (for easy access without making files too large). 
+
+Current time period - 14/02/2022 to 18/02/2022
+Variables - Composite rainfall and composite quality.
+
+Future work is to make this more general, and specify paramters through a JSON file so this can easily run for many different time periods, possibly as the backend to a data catalog of some sort.
+'''
 import pathlib
 import datetime
 import subprocess

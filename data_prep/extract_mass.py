@@ -1,4 +1,9 @@
 #!/usr/bin/env python
+'''
+This script extracts MOGREPS-G from the Met Office MASS data archive for particular period. It extracts data for particular variables and stores them in the specified location. Aggregation of data and other processing is done separately.
+
+Future work is to make this more general, and specify paramters through a JSON file so this can easily run for many different time periods, possibly as the backend to a data catalog of some sort.
+'''
 import pathlib
 import datetime
 import subprocess
