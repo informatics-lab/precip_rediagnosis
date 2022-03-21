@@ -1,0 +1,5 @@
+
+begin
+tar_filename='20200215.tar'
+filename='*nimrod_ng_radar_rainrate_composite_1km_UK.gz'
+end

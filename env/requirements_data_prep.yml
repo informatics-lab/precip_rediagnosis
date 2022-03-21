@@ -1,0 +1,11 @@
+name: prd_data_prep
+channels:
+  - conda-forge
+dependencies:
+  - python=3.8
+  - jupyterlab
+  - dask-labextension
+  - pandas
+  - xarray
+  - iris
+  - cartopy
