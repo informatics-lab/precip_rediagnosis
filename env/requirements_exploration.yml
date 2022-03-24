@@ -1,0 +1,13 @@
+name: prd_data_exploration
+channels:
+  - conda-forge
+dependencies:
+  - python=3.8
+  - jupyterlab
+  - dask-labextension
+  - pandas
+  - xarray
+  - iris
+  - cartopy
+  - seaborn
+  - windrose
