@@ -4,6 +4,7 @@ This script demonstrates a basic ML pipeline for the precip rediagnosis project,
 # core python imports
 import argparse
 import tempfile
+import pathlib
 
 # third party imports
 import numpy as np
@@ -16,6 +17,7 @@ from tensorflow.keras.layers import Conv1D, concatenate
 from tensorflow.keras.layers import ZeroPadding1D, Reshape, Input, Dropout, PReLU
 from tensorflow.keras.models import Sequential, Model
 
+import sklearn
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_absolute_error, r2_score
@@ -75,19 +77,6 @@ def train_model(model, data_splits):
                         batch_size=32, 
                         validation_split=0.25, verbose=True)
     return model
-
-def get_args():
-    parser = argparse.ArgumentParser(description='Process some integers.')
-    parser.add_argument('--dataset-name', dest='dataset_name',
-                        help='the name of the azure dataset to load.')
-    
-    parser.add_argument('--target-parameter', dest='target_parameter')
-    parser.add_argument('--profile-features', dest='profile_features',)
-    parser.add_argument('--single-level_features', dest='single_level_features')
-    parser.add_argument('--model-name', dest='model_name')
-                 
-    args = parser.parse_args()
-    return args
     
 def load_data(current_ws, dataset_name):
     dataset = azureml.core.Dataset.get_by_name(current_ws, name=dataset_name)
@@ -103,8 +92,11 @@ def preprocess_data(input_data, feature_dict):
     # Get a list of columns names for profile features
     prof_feature_columns = [s for s in data.columns for vars in feature_dict['profile'] if s.startswith(vars)]
 
+    print(prof_feature_columns )
+    print(feature_dict['single_level'])
     features = data[prof_feature_columns + feature_dict['single_level']]
-
+    print(features)
+    
     target = data[[feature_dict['target']]]
     # drop data points with zero precip in the radar data
     
@@ -155,6 +147,19 @@ def preprocess_data(input_data, feature_dict):
                    'y_test' : y_test,
                   }
     return data_splits, data_dims_dict
+
+def get_args():
+    parser = argparse.ArgumentParser(description='Process some integers.')
+    parser.add_argument('--dataset-name', dest='dataset_name',
+                        help='the name of the azure dataset to load.')
+    
+    parser.add_argument('--target-parameter', dest='target_parameter')
+    parser.add_argument('--profile-features', dest='profile_features',nargs='*')
+    parser.add_argument('--single-level_features', dest='single_level_features',nargs='*')
+    parser.add_argument('--model-name', dest='model_name')
+                 
+    args = parser.parse_args()
+    return args
         
     
 def main():
@@ -165,18 +170,23 @@ def main():
                     'single_level': args.single_level_features,
                     'target': args.target_parameter,
                    }
-    prd_ws = azureml.core.Workspace.from_config()
+    print(feature_dict)
     
     prd_run = azureml.core.Run.get_context()
+    
+    # We dont access a workspace in the same way in a script compared to a notebook, as described in the stackoverflow post:
+    # https://stackoverflow.com/questions/68778097/get-current-workspace-from-inside-a-azureml-pipeline-step 
+    prd_ws = prd_run.experiment.workspace
 
+    print(sklearn.__version__)
     input_data = load_data(prd_ws, args.dataset_name)
     data_splits, data_dims = preprocess_data(input_data, feature_dict)
 
     model = build_model(**data_dims)
 
-    model = train_model(data_splits)
+    model = train_model(model, data_splits)
 
-    y_pred = model.predict(X_test)
+    y_pred = model.predict(data_splits['X_test'])
     
     prd_model_name = args.model_name
     
@@ -188,16 +198,16 @@ def main():
         model_json_path = pathlib.Path(td1) / (prd_model_name + '.json')
         with open(model_json_path,'w') as json_file:
             json_file.write(model.to_json())
-        prd_run.upload_file(name=prd_model_name + '_architecture', path=model_json_path )
+        prd_run.upload_file(name=prd_model_name + '_architecture', path_or_stream=str(model_json_path) )
         model_save_path = pathlib.Path(td1) / prd_model_name
         model.save(model_save_path)
         prd_run.upload_folder(name=prd_model_name, path=str(model_save_path))
         prd_run.register_model(prd_model_name, prd_model_name + '/')
 
     # calculate some metrics
-    ma_error = mean_absolute_error(y_test, y_pred)
+    ma_error = mean_absolute_error(data_splits['y_test'], y_pred)
     prd_run.log('MAE', ma_error)
-    rsqrd = r2_score(y_test, y_pred)
+    rsqrd = r2_score(data_splits['y_test'], y_pred)
     prd_run.log(f'R-squared score', rsqrd)
     
 
