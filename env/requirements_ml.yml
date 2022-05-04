@@ -18,3 +18,5 @@ dependencies:
   - tensorflow
   - tensorboard
   - tf2onnx
+  - pip:
+    - azureml-defaults
