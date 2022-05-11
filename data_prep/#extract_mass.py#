@@ -14,7 +14,7 @@ root_mass =  'moose:/opfc/atm/mogreps-g/lev1/'
 num_periods = 10
 start_ref_time = datetime.datetime(2020,2,14,12)
 forecast_ref_time_range = [start_ref_time + datetime.timedelta(hours=6)*i1 for i1 in range(num_periods)]
-leadtime_hours =12
+leadtime_hours = 12
 
 variables_to_extract = [
     "cloud_amount_of_total_cloud",
@@ -30,22 +30,7 @@ variables_to_extract = [
     "snowfall_rate",
     "height_of_orography",
     "pressure_at_mean_sea_level",
-    'rainfall_rate',
-    'rainfall_rate_from_convection',
-    'rainfall_accumulation-PT03H',
-    'rainfall_accumulation_from_convection-PT03H',
-    'snowfall_rate',
-    'snowfall_rate_from_convection',
-    'snowfall_accumulation-PT03H',
-    'snowfall_accumulation_from_convection-PT03H',
-    'rainfall_rate_max-PT01H',
-    'rainfall_rate_max-PT03H',
-    'rainfall_rate_from_convection_max-PT03H',
-    'snowfall_rate_max-PT01H',
-    'snowfall_rate_max-PT03H',
-    'snowfall_rate_from_convection_max-PT03H',
 ]
-
 current_time = datetime.datetime.now()
 logs_directory = pathlib.Path('/data/users/shaddad/precip_rediagnosis/logs')
 current_timestamp = '{ct.year:04d}{ct.month:02d}{ct.day:02d}{ct.hour:02d}{ct.minute:02d}{ct.second:02d}'.format(ct=current_time)
@@ -103,9 +88,7 @@ for var1 in variables_to_extract:
     try:
         cmd_output = subprocess.check_output(mass_get_cmd, shell=True)
     except subprocess.CalledProcessError as err1:
-        logger.error(f'return code = {err1.returncode}\n'
-                     f'output = {err1.output}\n'
-                     f'error output = {err1.stderr}')
+        logger.error(f'return code = {err1.returncode}\noutput = {err1.output}')
 
     logger.info(f'get command output:\n{cmd_output}')
 

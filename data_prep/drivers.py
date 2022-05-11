@@ -101,11 +101,14 @@ class ModelStageExtractor(MassExtractor):
     def extract(self):
         variables_to_extract = self._opts['variables']
         leadtime_hours = self._opts['leadtime']
-        mass_root = self._opts['source_root']
+        mass_root = pathlib.Path(self._opts['source_root'])
         forecast_ref_time_range = calc_dates_list(self._date_range[0],
                                                   self._date_range[1],
                                                   self._opts['time_delta'],
                                                   )
+        output_dir = self._dest_path / self._opts['dataset']
+        if not output_dir.is_dir():
+            output_dir.mkdir()
         for var1 in variables_to_extract:
             extract_path_list = []
             for fcst_ref_time in forecast_ref_time_range:
@@ -120,7 +123,8 @@ class ModelStageExtractor(MassExtractor):
                                                      var_name=var1)
                              )
                 extract_path_list += [str(mass_path)]
-            output_dir = self._dest_path / self._opts['dataset']
+
+
             mass_get_cmd = MassExtractor.MASS_CMD_TEMPLATE.format(
                 src_paths=' '.join(extract_path_list),
                 dest_path=str(output_dir),
@@ -147,10 +151,15 @@ class RadarExtractor(MassExtractor):
         calc_dates_list
         fname_mass_template = self._opts['fname_mass_template']
 
-        dates_to_extract = calc_dates_list(self._date_range[0],
-                                           self._date_range[1],
+        # radar is archived by day, we want to make sure we get the days data
+        # for every day where we are looking for any part of that day
+
+
+        dates_to_extract = calc_dates_list(datetime.datetime(self._date_range[0].year, self._date_range[0].month, self._date_range[0].day, 0,0),
+                                           datetime.datetime(self._date_range[1].year, self._date_range[1].month, self._date_range[1].day, 23,59),
                                            self._opts['archive_time_chunk'],
                                            )
+
         fnames_to_extract = [fname_mass_template.format(dt=dt1)
                              for dt1 in dates_to_extract]
 

@@ -14,7 +14,7 @@ root_mass =  'moose:/opfc/atm/mogreps-g/lev1/'
 num_periods = 10
 start_ref_time = datetime.datetime(2020,2,14,12)
 forecast_ref_time_range = [start_ref_time + datetime.timedelta(hours=6)*i1 for i1 in range(num_periods)]
-leadtime_hours =12
+leadtime_hours = 15
 
 variables_to_extract = [
     "cloud_amount_of_total_cloud",
@@ -30,22 +30,7 @@ variables_to_extract = [
     "snowfall_rate",
     "height_of_orography",
     "pressure_at_mean_sea_level",
-    'rainfall_rate',
-    'rainfall_rate_from_convection',
-    'rainfall_accumulation-PT03H',
-    'rainfall_accumulation_from_convection-PT03H',
-    'snowfall_rate',
-    'snowfall_rate_from_convection',
-    'snowfall_accumulation-PT03H',
-    'snowfall_accumulation_from_convection-PT03H',
-    'rainfall_rate_max-PT01H',
-    'rainfall_rate_max-PT03H',
-    'rainfall_rate_from_convection_max-PT03H',
-    'snowfall_rate_max-PT01H',
-    'snowfall_rate_max-PT03H',
-    'snowfall_rate_from_convection_max-PT03H',
 ]
-
 current_time = datetime.datetime.now()
 logs_directory = pathlib.Path('/data/users/shaddad/precip_rediagnosis/logs')
 current_timestamp = '{ct.year:04d}{ct.month:02d}{ct.day:02d}{ct.hour:02d}{ct.minute:02d}{ct.second:02d}'.format(ct=current_time)
@@ -74,13 +59,8 @@ dataset = 'mogreps-g'
 subset = 'lev1'
 forecast_ref_template = '{frt.year:04d}{frt.month:02d}{frt.day:02d}T{frt.hour:02d}00Z.nc.file'
 fname_template = '{vt.year:04d}{vt.month:02d}{vt.day:02d}T{vt.hour:02d}00Z-PT{lead_time:04d}H00M-{var_name}.nc'
-dest_root = pathlib.Path('/scratch/shaddad/precip_rediagnosis/storm_dennis_9hr_lt')
+dest_root = pathlib.Path('/scratch/shaddad/precip_rediagnosis')
 mass_cmd_template = 'moo get {args} {files} {dest_dir}'
-output_dir = dest_root / dataset
-if not output_dir.is_dir():
-    logger.info('creating output directory {output_dir}')
-    output_dir.mkdir()
-
 for var1 in variables_to_extract:
     extract_path_list = []
     for fcst_ref_time in forecast_ref_time_range:
@@ -94,7 +74,7 @@ for var1 in variables_to_extract:
                                              var_name=var1)
                      )
         extract_path_list += [str(mass_path)]
-
+    output_dir =  dest_root / dataset
     mass_get_cmd = mass_cmd_template.format(files=' '.join(extract_path_list),
                                             dest_dir=str(output_dir),
                                             args='-f')
@@ -103,9 +83,7 @@ for var1 in variables_to_extract:
     try:
         cmd_output = subprocess.check_output(mass_get_cmd, shell=True)
     except subprocess.CalledProcessError as err1:
-        logger.error(f'return code = {err1.returncode}\n'
-                     f'output = {err1.output}\n'
-                     f'error output = {err1.stderr}')
+        logger.error(f'return code = {err1.returncode}\noutput = {err1.output}')
 
     logger.info(f'get command output:\n{cmd_output}')
 
