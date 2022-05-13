@@ -1,5 +1,6 @@
 name: prd_ml
 channels:
+  - defaults
   - conda-forge
 dependencies:
   - python=3.8
@@ -10,12 +11,10 @@ dependencies:
   - dask-ml
   - mlflow
   - pandas
-  - matplotlib
-  - scikit-learn=1.0
-  - tensorflow=2.7
-  - tensorboard=2.6
+  - xarray
+  - iris
+  - cartopy
+  - scikit-learn
+  - tensorflow
+  - tensorboard
   - tf2onnx
-  - matplotlib
-  - pip:
-    - azureml-defaults
-    
