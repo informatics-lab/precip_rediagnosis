@@ -16,3 +16,6 @@ dependencies:
   - tensorboard=2.6
   - tf2onnx
   - matplotlib
+  - pip:
+    - azureml-defaults
+    
