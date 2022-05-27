@@ -63,16 +63,16 @@ def build_model(nprof_features, nheights, nsinglvl_features):
         
     return model
 
-def train_model(model, data_splits):
+def train_model(model, data_splits, hyperparameter_dict):
     # TODO: these hyperparameters should be read in from somewhere?
-    optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
+    optimizer = tf.keras.optimizers.Adam(learning_rate=hyperparameter_dict['learning_rate'])
     model.compile(loss='mean_absolute_error', optimizer=optimizer)
 
     history = model.fit(data_splits['X_train'], 
                         data_splits['y_train'], 
-                        epochs=1, 
-                        batch_size=32, 
-                        validation_split=0.25, verbose=True)
+                        epochs=hyperparameter_dict['epochs'], 
+                        batch_size=hyperparameter_dict['batch_size'], 
+                        validation_data=(data_splits['X_val'], data_splits['y_val']), verbose=True)
     return model
     
 
@@ -124,7 +124,7 @@ def load_test_data(test_fn, feature_dict):
     return X_test, y_test
 
 
-def preprocess_data(input_data, feature_dict, test_fraction, test_savefn=None):
+def preprocess_data(input_data, feature_dict, test_fraction=0.2, test_savefn=None):
     # drop NaN values in the dataset
     data = input_data.dropna()
 

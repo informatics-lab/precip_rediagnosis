@@ -23,6 +23,9 @@ def get_args():
     parser.add_argument('--profile-features', dest='profile_features',nargs='*')
     parser.add_argument('--single-level_features', dest='single_level_features',nargs='*')
     parser.add_argument('--model-name', dest='model_name')
+    parser.add_argument('--epochs', dest='epochs', type=int)
+    parser.add_argument('--batch-size', dest='batch_size', type=int)
+    parser.add_argument('--learning-rate', dest='learning_rate', type=float)
                  
     args = parser.parse_args()
     return args
@@ -44,13 +47,20 @@ def main():
 
 
     input_data = prd_pipeline.load_data(prd_ws, args.dataset_name)
-    data_splits, data_dims = prd_pipeline.preprocess_data(input_data, feature_dict)
+    data_splits, data_dims = prd_pipeline.preprocess_data(
+        input_data, feature_dict, 
+        test_fraction=0.2, test_savefn='tmp.csv')  # TODO: update filename! Currently saves local copy of test dataset - perhaps not optimal
 
     model = prd_pipeline.build_model(**data_dims)
+    
+    hyperparameter_dict = {
+        'epochs': args.epochs, 
+        'learning_rate': args.learning_rate, 
+        'batch_size': args.batch_size
+    }
+    model = prd_pipeline.train_model(model, data_splits, hyperparameter_dict)
 
-    model = prd_pipeline.train_model(model, data_splits)
-
-    y_pred = model.predict(data_splits['X_test'])
+    y_pred = model.predict(data_splits['X_val'])
     
     prd_model_name = args.model_name
     
