@@ -20,7 +20,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_absolute_error, r2_score
 
 # azure specific imports
-# import azureml.core
+import azureml.core
 
 import pickle
 
