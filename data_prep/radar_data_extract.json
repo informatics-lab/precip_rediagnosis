@@ -5,12 +5,8 @@
     "https://www.metoffice.gov.uk/weather/warnings-and-advice/uk-storm-centre/storm-dennis",
     "https://www.metoffice.gov.uk/binaries/content/assets/metofficegovuk/pdf/weather/learn-about/uk-past-events/interesting/2020/2020_03_storm_dennis.pdf"
   ],
-  "event_start": "2020-02-14T18:00Z",
-  "event_end": "2020-02-17T18:00Z",
-  "target_time_delta": 6,
-  "date_fname_template": "{start.year:04d}{start.month:02d}{start.day:02d}T{start.hour:02d}{start.minute:02d}Z_{end.year:04d}{end.month:02d}{end.day:02d}T{end.hour:02d}{end.minute:02d}Z"
-  "fname_extension_grid": ".nc",
-  "fname_extension_tabular": ".csv",
+  "event_start": "2020-02-14T12:00Z",
+  "event_end": "2020-02-17T12:00Z",
   "data_sources": [
     {
       "data_type": "model_ensemble",
@@ -68,8 +64,6 @@
       },
       "resolution": "1km",
       "area": "UK",
-      "radar_fname_prefix": "prd_radar",
-
       "rainfall_thresholds": {
         "0.0": [0.0, 0.027],
         "0.03": [0.027, 0.033],

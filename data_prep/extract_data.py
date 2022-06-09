@@ -32,6 +32,13 @@ def get_args():
                          help='Directory to write log files to.',
                          default='logs',
                          )
+
+    parser1.add_argument('--target-cube-path',
+                         dest='target_cube_path',
+                         help='NetCDF file pointing to a cube containing a regridding target.',
+                         default='target_cube.nc',
+                         )
+
     args1 = parser1.parse_args()
     return args1
 
@@ -56,6 +63,11 @@ def main():
         'dest': cmd_args.output_path,
         'date_range': [start_dt, end_dt],
         'log_dir': cmd_args.log_dir,
+        'target_cube_path': cmd_args.target_cube_path,
+        'target_time_delta': float(dataset_config['target_time_delta']),
+        'date_fname_template': dataset_config['date_fname_template'],
+        'fname_extension_grid': dataset_config['fname_extension_grid'],
+        'fname_extension_tabular': dataset_config['fname_extension_tabular'],
     }
     driver_list = []
     for data_source_cfg in dataset_config['data_sources']:
