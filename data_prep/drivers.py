@@ -3,6 +3,7 @@ import pathlib
 import logging
 import sys
 import subprocess
+import functools
 
 import numpy
 import pandas
@@ -77,6 +78,15 @@ def cftime_to_datetime(input_cft):
                              input_cft.second,
                             )
 
+def load_ds(ds_path, selected_bounds):
+    try:
+        subset1 = dict(selected_bounds)
+        subset1['bnds'] = 0
+        single_level_ds = xarray.load_dataset(ds_path).sel(**subset1)
+    except KeyError as e1:
+        single_level_ds = None
+    return single_level_ds
+
 class MassExtractor():
     MASS_CMD_TEMPLATE = 'moo get {args} {src_paths} {dest_path}'
     UNZIP_CMD_TEMPLATE = 'gunzip {root}/{files}'
@@ -92,7 +102,7 @@ class MassExtractor():
         self._date_range = opts_dict['date_range']
         self._target_cube_path = opts_dict['target_cube_path']
         self._target_time_delta = opts_dict['target_time_delta']
-        self._date_fname_template = opts_dict['date_fname_template'],
+        self._date_fname_template = opts_dict['date_fname_template']
         self._fname_extension_grid = opts_dict['fname_extension_grid']
         self._fname_extension_tabular = opts_dict['fname_extension_tabular']
 
@@ -118,7 +128,8 @@ class MassExtractor():
     def prepare(self):
         raise NotImplementedError()
 
-    def get_merge_data(self):
+    @property
+    def data_to_merge(self):
         return self._merge_data
 
 
@@ -178,12 +189,110 @@ class ModelStageExtractor(MassExtractor):
         hl_vars = self._opts['height_level_variables']
         variables_to_extract = sl_vars + hl_vars
 
+        output_dir = self._dest_path / self._opts['dataset']
 
         dataset = self._opts['dataset']
         subset = self._opts['subset']
         forecast_ref_template = '{frt.year:04d}{frt.month:02d}{frt.day:02d}T{frt.hour:02d}00Z.nc.file'
         fname_template = '{vt.year:04d}{vt.month:02d}{vt.day:02d}T{vt.hour:02d}00Z-PT{lead_time:04d}H00M-{var_name}.nc'
 
+        leadtime_hours = self._opts['leadtime']
+
+        # load a cube for each variable in iris to get the actual variable name, and populate dictionary mapping from the var name in the file name to the variable as loaded into iris/xarray
+        file_to_var_mapping = {
+            var_file_name: iris.load_cube(
+                str(output_dir / fname_template.format(
+                    vt=self._target_time_range[0],
+                    lead_time=leadtime_hours,
+                    var_name=var_file_name))).name()
+            for var_file_name in variables_to_extract}
+        heights = iris.load_cube(
+            str(output_dir / fname_template.format(
+                vt=self._target_time_range[0],
+                lead_time=leadtime_hours,
+                var_name=
+                hl_vars[0]))).coord('height').points
+        merge_coords = ['latitude', 'longitude', 'time', 'realization']
+        single_level_var_mappings = {v1: file_to_var_mapping[v1] for v1 in
+                                     sl_vars}
+        height_level_var_mappings = {v1: file_to_var_mapping[v1] for v1 in
+                                     hl_vars}
+
+        target_grid_cube = iris.load_cube(
+            str(self._target_cube_path)
+        )
+
+
+        uk_bounds = {
+            'latitude': (min(target_grid_cube.coord('latitude').points), max(target_grid_cube.coord('latitude').points)),
+            'longitude': (min(target_grid_cube.coord('longitude').points), max(target_grid_cube.coord('longitude').points))}
+        xarray_select_uk = {k1: slice(*v1) for k1, v1 in uk_bounds.items()}
+
+        ts_data_list = []
+        # gridded_data_list = []
+        for validity_time in self._target_time_range:
+            self.logger.info(f'processing model data for time {validity_time}')
+            single_level_ds = xarray.merge([load_ds(
+                ds_path=output_dir / fname_template.format(vt=validity_time,
+                                                                   lead_time=leadtime_hours,
+                                                                   var_name=var1),
+                selected_bounds=xarray_select_uk,
+                )
+                                            for var1 in sl_vars]
+                                           )
+            single_level_df = single_level_ds.to_dataframe().reset_index()
+
+            height_levels_ds = xarray.merge([load_ds(
+                ds_path=output_dir / fname_template.format(vt=validity_time,
+                                                                   lead_time=leadtime_hours,
+                                                                   var_name=var1),
+                selected_bounds=xarray_select_uk,
+                )
+                                             for var1 in hl_vars])
+            hl_df_multirow = height_levels_ds.to_dataframe().reset_index()
+
+            var_df_merged = []
+            # heights_vars_marged = height_levels_df[height_levels_df.height==heights[0]][ merge_coords]
+            for var1 in height_level_var_mappings.values():
+                print(var1)
+                # for h1 in heights:
+                #     heights_vars_marged[f'{var1}_{h1:.1f}'] = list(height_levels_df[height_levels_df.height==h1][var1])
+                var_at_heights = [hl_df_multirow[hl_df_multirow.height == h1][
+                                      merge_coords + [var1]].rename(
+                    {var1: f'{var1}_{h1:.1f}'}, axis='columns') for h1 in heights]
+                var_df_merged += [
+                    functools.reduce(lambda x, y: x.merge(y, on=merge_coords),
+                                     var_at_heights)]
+            height_levels_df = functools.reduce(
+                lambda x, y: x.merge(y, on=merge_coords), var_df_merged)
+
+            mogreps_g_single_ts_uk_df = single_level_df.merge(height_levels_df,
+                                                              on=merge_coords)
+            mogreps_g_single_ts_uk_df
+
+            mogreps_g_single_ts_uk_df = single_level_df.merge(height_levels_df,
+                                                              on=merge_coords)
+            ts_data_list += [mogreps_g_single_ts_uk_df]
+            ts_mogg_ds1 = xarray.merge([height_levels_ds, single_level_ds])
+            ts_mogg_ds1.to_netcdf(output_dir / (
+                    'prd_mg_ts_' + f'{validity_time.year:04d}{validity_time.month:02d}{validity_time.day:02d}{validity_time.hour:02d}{validity_time.minute:02d}'
+                    + self._fname_extension_grid)
+                                  )
+            # gridded_data_list += [xarray.merge([height_levels_ds, single_level_ds])]
+
+        prd_column_dataset = pandas.concat(ts_data_list)
+
+        fname_timestamp = self._date_fname_template.format(
+            start=prd_column_dataset['time'].min(),
+            end=prd_column_dataset['time'].max(), )
+        model_output_fname = self._opts['model_fname_prefix'] + '_' + self._opts['leadtime_template'].format(lt=leadtime_hours) + '_' + fname_timestamp + self._fname_extension_tabular
+        model_output_path = output_dir / model_output_fname
+        self.logger.info(f'outputting model data to {model_output_path}')
+        prd_column_dataset.to_csv(model_output_path)
+
+        # Assign the output variable to the correct memeber variable
+        # for subsequent merging
+        self._merge_data = prd_column_dataset
 
 
 
@@ -427,7 +536,7 @@ class RadarExtractor(MassExtractor):
                 radar_agg_3hr[0, :, :].data.mask)
 
             radar_instant_select_time = radar_cube.extract(iris.Constraint(
-                time=lambda c1: compare_time(c1.bound[0], validity_time)))
+                time=lambda c1: compare_time(c1.point, validity_time)))
             radar_instant_data1 = radar_instant_select_time.data.data
             masked_radar_instant = numpy.ma.MaskedArray(
                 radar_instant_data1,
@@ -489,24 +598,25 @@ class RadarExtractor(MassExtractor):
             var_name='time',
             units=radar_cube.coord('time').units,
         )
-
+        var_name_fraction_agg = 'fraction_in_band_aggregate_3hr'
         fraction_agg_rain_band = iris.cube.Cube(
             data=bands_agg_data,
             dim_coords_and_dims=(
             (radar_time_coord, 0), (target_lat_coord, 1), (target_lon_coord, 2),
             (band_coord, 3)),
             units=None,
-            var_name='fraction_in_band_aggregate_3hr',
+            var_name= var_name_fraction_agg,
             long_name='Fraction radar rainfall cells in specified rain band',
         )
 
+        var_name_fraction_instant = 'fraction_in_band_instant'
         fraction_instant_rain_band = iris.cube.Cube(
             data=bands_instant_data,
             dim_coords_and_dims=(
             (radar_time_coord, 0), (target_lat_coord, 1), (target_lon_coord, 2),
             (band_coord, 3)),
             units=None,
-            var_name='fraction_in_band_instant',
+            var_name=var_name_fraction_instant,
             long_name='Fraction radar rainfall cells in specified rain band',
         )
 
@@ -553,21 +663,21 @@ class RadarExtractor(MassExtractor):
         # restructure the dataframe, so that fractions in different bands are
         # separate coumns (features), rather than different data points (rows)
         radar_df = frac_agg_df[frac_agg_df['band'] == float(rain_bands[0])][
-            ['time', 'latitude', 'longitude', 'fraction_in_band']]
+            ['time', 'latitude', 'longitude', var_name_fraction_agg]]
         radar_df = radar_df.rename(
-            {'fraction_in_band': f'fraction_in_band_agg_{rain_bands[0]}'},
+            {var_name_fraction_agg: f'{var_name_fraction_agg}_{rain_bands[0]}'},
             axis='columns')
 
         for band1 in rain_bands[1:]:
             df1 = frac_agg_df[frac_agg_df['band'] == float(band1)][
-                ['time', 'latitude', 'longitude', 'fraction_in_band']]
-            df1 = df1.rename({'fraction_in_band_': f'fraction_in_band_agg_{band1}'},
+                ['time', 'latitude', 'longitude', var_name_fraction_agg]]
+            df1 = df1.rename({var_name_fraction_agg: f'{var_name_fraction_agg}_{band1}'},
                              axis='columns')
             radar_df = pandas.merge(radar_df, df1,
                                     on=['time', 'latitude', 'longitude'])
             df1 = frac_instant_df[frac_instant_df['band'] == float(band1)][
-                ['time', 'latitude', 'longitude', 'fraction_in_band']]
-            df1 = df1.rename({'fraction_in_band': f'fraction_in_band_instant_{band1}'},
+                ['time', 'latitude', 'longitude', var_name_fraction_instant]]
+            df1 = df1.rename({var_name_fraction_instant: f'{var_name_fraction_instant}_{band1}'},
                              axis='columns')
             radar_df = pandas.merge(radar_df, df1,
                                     on=['time', 'latitude', 'longitude'])
@@ -581,10 +691,13 @@ class RadarExtractor(MassExtractor):
                                 on=['time', 'latitude', 'longitude'])
 
         radar_tab_fname = (self._opts['radar_fname_prefix'] + '_' +
-                           fname_timestamp + self._fname_extension_grid
+                           fname_timestamp + self._fname_extension_tabular
                            )
         radar_df.to_csv(output_dir / radar_tab_fname)
 
+        # Assign the output variable to the correct memeber variable
+        # for subsequent merging
+        self._merge_data = radar_df
 
 
 class DummyExtractor(MassExtractor):
@@ -597,6 +710,7 @@ class DummyExtractor(MassExtractor):
 
     def prepare(self):
         pass
+
 
 
 EXTRACTORS = {
@@ -615,7 +729,16 @@ def extractor_factory(extractor_str, init_args):
     driver_obj = driver_class(opts_dict=init_args)
     return driver_obj
 
-# create extra file to read ion args from command line and path to opts file
-# write each lead time's data to a separate location
-# port notebook to ascript to run after extractor driver, with a prepare function in the driver
-# think about how the merging will work
+def merge_prepared_output(extractor_list, merge_vars, merge_method='inner'):
+    """
+
+    :param extractor_list:
+    :param merge_vars:
+    :return:
+    """
+    merged_df = extractor_list[0]
+    if len(extractor_list) > 1:
+        for extractor1 in extractor_list[1:]:
+            merged_df = merged_df.merge(extractor1.data_to_merge,
+                                        on=merge_vars, how=merge_method)
+    return merged_df

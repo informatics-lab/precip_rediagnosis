@@ -80,8 +80,19 @@ def main():
         driver1.prepare()
         driver_list += [driver1]
 
-    # merge_data(driver_list)
+    merged_df = drivers.merge_prepared_output(
+        extractor_list=driver_list,
+        merge_vars=dataset_config['merge_vars'],
+        merge_method='inner')
 
+    # generate output filename and path
+    start_dt = min(merged_df['time'])
+    end_dt = max(merged_df['time'])
+    fname_timestamp = dataset_config['date_fname_template'].format(start=start_dt, end=end_dt)
+    merged_fname = dataset_config['merged_outpout_prefix'] + '_' + fname_timestamp + dataset_config['fname_extension_tabular']
+    merged_output_path = pathlib.Path(cmd_args.output_path) / merged_fname
+
+    merged_df.to_csv(merged_output_path)
 
 if __name__ == '__main__':
     main()
