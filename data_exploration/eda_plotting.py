@@ -66,19 +66,22 @@ def visualise_ens_spread(df, var, spread_var='std'):
         if spread_var == 'std':
             ax[i, j].hist(
                 grouped_data[col]['std'], 
-                bins=50, density=True)
-            plt.suptitle(f'Standard deviation - {var}')
+                bins=50)
+            fig.suptitle(f'{var}')
+            fig.supxlabel('Standard deviation')
         if spread_var == 'range':
             ax[i, j].hist(
                 grouped_data[col]['max'] - grouped_data[col]['min'], 
-                bins=30, density=True)
-            plt.suptitle(f'Range - {var}')
+                bins=30)
+            fig.suptitle(f'Range - {var}')
+            fig.supxlabel('Range')
         ax[i,j].set_title(f'{height}m')
-        
+
         j += 1
         if j == 11:
             i += 1
             j = 0
+    fig.text(0.1, 0.5, 'Frequency', va='center', ha='center', rotation='vertical')
     plt.show()
     
     
@@ -202,7 +205,7 @@ def radar_fraction_bins_plot(df, target_var, examples, bins_dict):
 
         ax[i].legend(loc='center left', bbox_to_anchor=(1, 0.5))
             
-    ax[-1].set_xlabel('Precipitation lower bound (mm)')  
+    ax[-1].set_xlabel('Precipitation band (mm)')  
 
     plt.show()
     
