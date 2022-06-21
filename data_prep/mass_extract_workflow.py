@@ -14,8 +14,9 @@ from dagster import (
 import pandas as pd
 
 
-@op
-def run_cmd(cmd):
+@op(required_resource_keys={"values"})
+def run_cmd(context, cmd):
+    sep = context.resources.values["sep"]
     get_dagster_logger().info(f"Running shell command: {cmd!r}")
     try:
         response = subprocess.check_output(cmd, shell=True)
@@ -23,8 +24,8 @@ def run_cmd(cmd):
         get_dagster_logger().error(f"Command errored: {e}")
         raise RetryRequested(max_retries=1, seconds_to_wait=30) from e
     else:
-        get_dagster_logger().info(f"Command returned response: {response}")
-    return response
+        get_dagster_logger().info(f"Command returned response: {response!r}")
+    return f"{cmd}{sep}{response}"
 
 
 @op
@@ -142,9 +143,16 @@ def filter_mass_retrieval(context, temp_dir, _):
 #     filter_mass_retrieval(mass_tar_name)
 
 
-@op
-def logit(responses):
-    get_dagster_logger.info("\n".join(responses))
+@op(required_resource_keys={"values"})
+def logit(context, responses):
+    """Record important output from cmd executions to a log file."""
+    sep = context.resources.values["sep"]
+    if isinstance(responses, str):
+        responses = [responses]
+    for response in responses:
+        cmd, _ = response.split(sep)
+        path = cmd.split(" ")[-1]
+        get_dagster_logger().info(path)
     return "done!"
 
 
@@ -166,6 +174,7 @@ def remove_temp_dir(tempdir, _):
 def mass_retrieve_and_extract(mass_fname):
     tempdir = create_temp_dir()
     retrieve_resp = run_cmd(retrieve_from_mass(mass_fname, tempdir))
+    _ = logit(retrieve_resp)
     extract_resp = run_cmd(extract_mass_retrieval(tempdir, mass_fname, retrieve_resp))
     unzip_cmds = filter_mass_retrieval(tempdir, extract_resp)
     resps = unzip_cmds.map(run_cmd)

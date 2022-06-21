@@ -4,6 +4,9 @@ resources:
       mass_root: moose:/adhoc/projects/radar_archive/data/comp/products/composites/
       retrieve_path_root: /scratch/dkillick/precip_rediagnosis/radar/
       dest_path: radar
+      sep: " :: "
+      logdir: "."
+      logfile: retrieved.log
 ops:
   dates_to_extract:
     config:
