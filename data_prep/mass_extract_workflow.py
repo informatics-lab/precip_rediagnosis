@@ -5,13 +5,50 @@ import subprocess
 from tempfile import TemporaryDirectory
 
 from dagster import (
+    In, Nothing,
     get_dagster_logger,
-    graph, job, op,
+    graph, job, op, resource,
     make_values_resource,
-    DynamicOut, DynamicOutput, Out,
+    DynamicOut, DynamicOutput,
     RetryRequested,
 )
 import pandas as pd
+
+
+class EncapsulatedTemporaryDir(object):
+    def __init__(self, prefix):
+        self.prefix = prefix
+
+        self._tempdir = None
+        self.open()
+
+    @property
+    def tempdir(self):
+        if self._tempdir is None:
+            self.open()
+        return self._tempdir
+
+    @tempdir.setter
+    def tempdir(self, value):
+        self._tempdir = value
+
+    @property
+    def name(self):
+        return self.tempdir.name
+
+    def open(self):
+        self.tempdir = TemporaryDirectory(prefix=self.prefix)
+
+    def close(self):
+        self.tempdir.cleanup()
+
+
+@resource(required_resource_keys={"setup"})
+def tempdir_resource(context):
+    prefix = context.resources.setup["retrieve_path_root"]
+    tempdir = EncapsulatedTemporaryDir(prefix)
+    get_dagster_logger().info(f"Temporary extract directory: {tempdir.name}")
+    return tempdir
 
 
 @op(required_resource_keys={"setup"})
@@ -67,9 +104,10 @@ def get_mass_paths(context, dates):
         yield DynamicOutput(mass_path, mapping_key=f"path_{i}")
 
 
-@op(required_resource_keys={"setup"})
-def retrieve_from_mass(context, mass_fname, temp_dir) -> str:
+@op(required_resource_keys={"setup", "tempdir_resource"})
+def retrieve_from_mass(context, mass_fname) -> str:
     """Get a file from MASS."""
+    temp_dir = context.resources.tempdir_resource
     mass_root = context.resources.setup["mass_root"]
     mass_get_cmd_template = context.op_config["mass_get_cmd"]
     dest_path = os.path.join(temp_dir.name, context.resources.setup["dest_path"])
@@ -82,9 +120,10 @@ def retrieve_from_mass(context, mass_fname, temp_dir) -> str:
     return mass_get_cmd
 
 
-@op(required_resource_keys={"setup"})
-def extract_mass_retrieval(context, temp_dir, mass_fname, _) -> str:
+@op(required_resource_keys={"setup", "tempdir_resource"})
+def extract_mass_retrieval(context, mass_fname, _) -> str:
     """Extract a tar archive file retrieved from MASS."""
+    temp_dir = context.resources.tempdir_resource
     untar_cmd_template = context.op_config["untar_cmd"]
     dest_path = context.resources.setup["dest_path"]
     extract_path = os.path.join(temp_dir.name, dest_path)
@@ -97,9 +136,10 @@ def extract_mass_retrieval(context, temp_dir, mass_fname, _) -> str:
     return untar_cmd
 
 
-@op(required_resource_keys={"setup"}, out=DynamicOut())
-def filter_mass_retrieval(context, temp_dir, _):
+@op(required_resource_keys={"setup", "tempdir_resource"}, out=DynamicOut())
+def filter_mass_retrieval(context, _):
     """Filter the extracted archive from MASS for specific files of interest."""
+    temp_dir = context.resources.tempdir_resource
     filter_products = context.op_config["products"]
     variable_fname_template = context.op_config["variable_fname_template"]
     gunzip_files = []
@@ -138,52 +178,68 @@ def logit(context, responses):
         cmd, _ = response.split(sep)
         path = cmd.split(" ")[-1]
         get_dagster_logger().info(path)
-    return "done!"
 
 
-@op(required_resource_keys={"setup"})
-def create_temp_dir(context):
-    retrieve_path_root = context.resources.setup["retrieve_path_root"]
-    tempdir = TemporaryDirectory(prefix=retrieve_path_root)
-    get_dagster_logger().info(f"Temporary extract directory: {tempdir.name}")
-    return tempdir
+# @op(required_resource_keys={"setup"})
+# def create_temp_dir(context):
+#     retrieve_path_root = context.resources.setup["retrieve_path_root"]
+#     tempdir = TemporaryDirectory(prefix=retrieve_path_root)
+#     get_dagster_logger().info(f"Temporary extract directory: {tempdir.name}")
+#     return tempdir
 
 
-@op
-def remove_temp_dir(tempdir, _):
+# @op
+# def remove_temp_dir_old(tempdir, _):
+#     get_dagster_logger().info(f"Temporary directory {tempdir.name} removed")
+#     tempdir.cleanup()
+
+
+@op(
+    ins={"start": In(Nothing)},
+    required_resource_keys={"tempdir_resource"}
+)
+def remove_temp_dir(context):
+    tempdir = context.resources.tempdir_resource
     get_dagster_logger().info(f"Temporary directory {tempdir.name} removed")
     tempdir.cleanup()
 
 
+# @graph
+# def mass_retrieve_and_extract_old(mass_fname):
+#     tempdir = create_temp_dir()
+#     retrieve_resp = run_cmd(retrieve_from_mass(mass_fname, tempdir))
+#     _ = logit(retrieve_resp)
+#     extract_resp = run_cmd(extract_mass_retrieval(tempdir, mass_fname, retrieve_resp))
+#     unzip_cmds = filter_mass_retrieval(tempdir, extract_resp)
+#     resps = unzip_cmds.map(run_cmd)
+#     done = logit(resps.collect())
+#     remove_temp_dir(tempdir, done)
+
+
 @graph
 def mass_retrieve_and_extract(mass_fname):
-    tempdir = create_temp_dir()
-    retrieve_resp = run_cmd(retrieve_from_mass(mass_fname, tempdir))
-    _ = logit(retrieve_resp)
-    extract_resp = run_cmd(extract_mass_retrieval(tempdir, mass_fname, retrieve_resp))
-    unzip_cmds = filter_mass_retrieval(tempdir, extract_resp)
+    retrieve_resp = run_cmd(retrieve_from_mass(mass_fname))
+    logit(retrieve_resp)
+    extract_resp = run_cmd(extract_mass_retrieval(mass_fname, retrieve_resp))
+    unzip_cmds = filter_mass_retrieval(extract_resp)
     resps = unzip_cmds.map(run_cmd)
-    done = logit(resps.collect())
-    remove_temp_dir(tempdir, done)
+    remove_temp_dir(start=logit(resps.collect()))
 
 
 @job(
-    resource_defs={"setup": make_values_resource(
-        mass_root=str,
-        retrieve_path_root=str,
-        dest_path=str,
-        sep=str,
-        logdir=str,
-        logfile=str,
-    )}
+    resource_defs={
+        "setup": make_values_resource(
+            mass_root=str,
+            retrieve_path_root=str,
+            dest_path=str,
+            sep=str,
+            logdir=str,
+            logfile=str,
+        ),
+        "tempdir_resource": tempdir_resource,
+    }
 )
 def mass_extract():
     dates = dates_to_extract()
     paths = get_mass_paths(dates)
     paths.map(mass_retrieve_and_extract)
-    # results.collect()
-
-
-# job_result = mass_extract.execute_in_process(
-#     run_config=radar_config
-# )
