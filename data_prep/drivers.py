@@ -254,7 +254,7 @@ class ModelStageExtractor(MassExtractor):
             var_df_merged = []
             # heights_vars_marged = height_levels_df[height_levels_df.height==heights[0]][ merge_coords]
             for var1 in height_level_var_mappings.values():
-                logger(var1)
+                self.logger.debug(var1)
                 # for h1 in heights:
                 #     heights_vars_marged[f'{var1}_{h1:.1f}'] = list(height_levels_df[height_levels_df.height==h1][var1])
                 var_at_heights = [hl_df_multirow[hl_df_multirow.height == h1][
