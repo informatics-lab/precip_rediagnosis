@@ -48,7 +48,9 @@ def merge_data(drivers_list, merge_vars, output_path):
 
 def main():
     cmd_args = get_args()
-
+    logger1 = drivers.get_logger(cmd_args.log_dir, drivers.MassExtractor.LOGGER_KEY)
+    logger1.info('Running extract and prepare workflow for precip rediagnosis.')
+    logger1.info(f'reading config from {cmd_args.config_file}')
     with open(cmd_args.config_file) as config_file:
         dataset_config = json.load(config_file)
 
@@ -71,15 +73,17 @@ def main():
     }
     driver_list = []
     for data_source_cfg in dataset_config['data_sources']:
+        logger1.info(f'processing data source of type {data_source_cfg["data_type"]}')
         driver_init_args['opts'] = data_source_cfg
-        print('extracting data from source with config as follows:')
-        pprint.pprint(data_source_cfg)
         driver1 = drivers.extractor_factory(data_source_cfg['data_extractor'],
                                             driver_init_args)
-        driver1.extract()
+        logger1.info(f'Running extract for {data_source_cfg["data_type"]}')
+        # driver1.extract()
+        logger1.info(f'Running prepare for {data_source_cfg["data_type"]}')
         driver1.prepare()
         driver_list += [driver1]
 
+    logger1.info('merging data from different sources into one dataframe')
     merged_df = drivers.merge_prepared_output(
         extractor_list=driver_list,
         merge_vars=dataset_config['merge_vars'],
@@ -91,8 +95,9 @@ def main():
     fname_timestamp = dataset_config['date_fname_template'].format(start=start_dt, end=end_dt)
     merged_fname = dataset_config['merged_outpout_prefix'] + '_' + fname_timestamp + dataset_config['fname_extension_tabular']
     merged_output_path = pathlib.Path(cmd_args.output_path) / merged_fname
+    logger1.info(f'writing merged dataframe to {merged_output_path}')
 
     merged_df.to_csv(merged_output_path)
-
+    logger1.info('processing completed successfully.')
 if __name__ == '__main__':
     main()
