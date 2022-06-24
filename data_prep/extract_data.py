@@ -78,7 +78,7 @@ def main():
         driver1 = drivers.extractor_factory(data_source_cfg['data_extractor'],
                                             driver_init_args)
         logger1.info(f'Running extract for {data_source_cfg["data_type"]}')
-        # driver1.extract()
+        driver1.extract()
         logger1.info(f'Running prepare for {data_source_cfg["data_type"]}')
         driver1.prepare()
         driver_list += [driver1]
