@@ -33,6 +33,6 @@ ops:
             - nimrod_ng_radar_rainrate_composite
             - nimrod_ng_radar_qualityproduct_composite
           variable_fname_timestamp: "*"
-          variable_fname_template: "{timestamp}_{product}_{resolution}_{area}"
+          variable_fname_template: "{timestamp}_{product}_{resolution}_{area}.gz"
           variable_fname_resolution: 1km
           variable_fname_area: UK

@@ -1,8 +1,12 @@
+import atexit
 import datetime
 import glob
+from hashlib import blake2b
 import os
+import shutil
 import subprocess
-from tempfile import TemporaryDirectory
+from tempfile import TemporaryDirectory, mkdtemp
+from typing import List
 
 from dagster import (
     In, Nothing,
@@ -18,14 +22,16 @@ import pandas as pd
 class EncapsulatedTemporaryDir(object):
     def __init__(self, prefix):
         self.prefix = prefix
+        if not self.prefix.endswith(os.sep):
+            self.prefix += os.sep
 
         self._tempdir = None
-        self.open()
+        self.mk_tempdir()
 
     @property
     def tempdir(self):
         if self._tempdir is None:
-            self.open()
+            self.mk_tempdir()
         return self._tempdir
 
     @tempdir.setter
@@ -36,23 +42,57 @@ class EncapsulatedTemporaryDir(object):
     def name(self):
         return self.tempdir.name
 
-    def open(self):
+    def mk_tempdir(self):
         self.tempdir = TemporaryDirectory(prefix=self.prefix)
 
-    def close(self):
+    def rm_tempdir(self):
         self.tempdir.cleanup()
+
+
+class EncapsulatedMkdTemp(object):
+    def __init__(self, prefix):
+        self.prefix = prefix
+        if not self.prefix.endswith(os.sep):
+            self.prefix += os.sep
+
+        self._tempdir = None
+        self.mk_tempdir()
+
+        # Automatic cleanup on process exit.
+        # atexit.register(self.rm_tempdir)
+
+    @property
+    def tempdir(self):
+        if self._tempdir is None:
+            self.mk_tempdir()
+        return self._tempdir
+
+    @tempdir.setter
+    def tempdir(self, value):
+        self._tempdir = value
+
+    @property
+    def name(self):
+        return self.tempdir
+
+    def mk_tempdir(self):
+        self.tempdir = mkdtemp(prefix=self.prefix)
+
+    def rm_tempdir(self):
+        shutil.rmtree(self.name)
 
 
 @resource(required_resource_keys={"setup"})
 def tempdir_resource(context):
     prefix = context.resources.setup["retrieve_path_root"]
-    tempdir = EncapsulatedTemporaryDir(prefix)
+    # tempdir = EncapsulatedTemporaryDir(prefix)
+    tempdir = EncapsulatedMkdTemp(prefix)
     get_dagster_logger().info(f"Temporary extract directory: {tempdir.name}")
     return tempdir
 
 
 @op(required_resource_keys={"setup"})
-def run_cmd(context, cmd):
+def run_cmd(context, cmd: str):
     sep = context.resources.setup["sep"]
     get_dagster_logger().info(f"Running shell command: {cmd!r}")
     try:
@@ -104,43 +144,45 @@ def get_mass_paths(context, dates):
         yield DynamicOutput(mass_path, mapping_key=f"path_{i}")
 
 
-@op(required_resource_keys={"setup", "tempdir_resource"})
-def retrieve_from_mass(context, mass_fname) -> str:
+@op(required_resource_keys={"setup"})
+def retrieve_from_mass(context, temp_dir, mass_fname) -> str:
     """Get a file from MASS."""
-    temp_dir = context.resources.tempdir_resource
+    # temp_dir = context.resources.tempdir_resource
     mass_root = context.resources.setup["mass_root"]
     mass_get_cmd_template = context.op_config["mass_get_cmd"]
-    dest_path = os.path.join(temp_dir.name, context.resources.setup["dest_path"])
+    # dest_path = os.path.join(temp_dir.name, context.resources.setup["dest_path"])
     mass_path = os.path.join(mass_root, mass_fname)
     mass_get_cmd = mass_get_cmd_template.format(
         args=context.op_config["mass_get_args"],
-        src_paths=mass_path,
-        dest_path=dest_path
+        src_paths=mass_fname,
+        dest_path=temp_dir.name
     )
     return mass_get_cmd
 
 
-@op(required_resource_keys={"setup", "tempdir_resource"})
-def extract_mass_retrieval(context, mass_fname, _) -> str:
+@op
+def extract_mass_retrieval(context, temp_dir, mass_fname, _) -> str:
     """Extract a tar archive file retrieved from MASS."""
-    temp_dir = context.resources.tempdir_resource
+    # temp_dir = context.resources.tempdir_resource
     untar_cmd_template = context.op_config["untar_cmd"]
-    dest_path = context.resources.setup["dest_path"]
-    extract_path = os.path.join(temp_dir.name, dest_path)
+    # dest_path = context.resources.setup["dest_path"]
+    # extract_path = os.path.join(temp_dir.name, dest_path)
     mass_tar_name = os.path.basename(mass_fname)
-    extracted_tar_name = os.path.join(extract_path, mass_tar_name)
+    extracted_tar_name = os.path.join(temp_dir.name, mass_tar_name)
     untar_cmd = untar_cmd_template.format(
         path=extracted_tar_name,
-        dest_root=extract_path
+        dest_root=temp_dir.name
     )
     return untar_cmd
 
 
-@op(required_resource_keys={"setup", "tempdir_resource"}, out=DynamicOut())
-def filter_mass_retrieval(context, _):
+@op(required_resource_keys={"setup"}, out=DynamicOut())
+def filter_mass_retrieval(context, temp_dir, _) -> List[DynamicOutput[str]]:
     """Filter the extracted archive from MASS for specific files of interest."""
-    temp_dir = context.resources.tempdir_resource
+    # temp_dir = context.resources.tempdir_resource
     filter_products = context.op_config["products"]
+    # get_dagster_logger().info(f"Temp directory: {temp_dir.name}")
+    # get_dagster_logger().info(f"Filter products: {filter_products}")
     variable_fname_template = context.op_config["variable_fname_template"]
     gunzip_files = []
     for product in filter_products:
@@ -151,10 +193,12 @@ def filter_mass_retrieval(context, _):
             area=context.op_config["variable_fname_area"]
         )
         gunzip_files.extend(glob.glob(os.path.join(temp_dir.name, variable_fname)))
+    # get_dagster_logger().info(f"First 10 files to unzip: {gunzip_files[:10]} ...")
 
     unzip_cmd_template = context.op_config["unzip_cmd"]
     dest_root = context.resources.setup["retrieve_path_root"]
-    for i, zip_file in enumerate(gunzip_files):
+    unzip_cmds = []
+    for zip_file in gunzip_files:
         # XXX this won't work if our files have a file extension..?
         filename = os.path.splitext(os.path.basename(zip_file))[0]
         dest_path = os.path.join(dest_root, filename)
@@ -162,7 +206,11 @@ def filter_mass_retrieval(context, _):
             zip_file=zip_file,
             dest_path=dest_path
         )
-        yield DynamicOutput(unzip_cmd, mapping_key=f"unzip_{i}")
+        i = blake2b(salt=os.urandom(blake2b.SALT_SIZE)).hexdigest()[:16]
+        unzip_cmds.append((f"unzip_{i}", unzip_cmd))
+        # yield DynamicOutput(unzip_cmd, mapping_key=f"unzip_{i}")
+    get_dagster_logger().info(f"Unzip commands: {[cmd for (_, cmd) in unzip_cmds]}")
+    return [DynamicOutput(cmd, mapping_key=i) for (i, cmd) in unzip_cmds[:10]]
 
 
 @op(required_resource_keys={"setup"})
@@ -180,6 +228,13 @@ def logit(context, responses):
         get_dagster_logger().info(path)
 
 
+@op
+def dir_check(tempdir):
+    import time
+    get_dagster_logger().info(f"Temporary directory: {tempdir.name!r}")
+    time.sleep(30)
+
+
 # @op(required_resource_keys={"setup"})
 # def create_temp_dir(context):
 #     retrieve_path_root = context.resources.setup["retrieve_path_root"]
@@ -194,14 +249,32 @@ def logit(context, responses):
 #     tempdir.cleanup()
 
 
-@op(
-    ins={"start": In(Nothing)},
-    required_resource_keys={"tempdir_resource"}
-)
-def remove_temp_dir(context):
+@op(required_resource_keys={"tempdir_resource"})
+def create_temp_dir(context, _):
     tempdir = context.resources.tempdir_resource
+    get_dagster_logger().info(f"Temporary directory created: {tempdir.name!r}")
+    return tempdir
+
+
+@op(ins={"start": In(Nothing)})
+def remove_temp_dir(context, tempdir):
+    # XXX this must always run!
+    # tempdir = context.resources.tempdir_resource
     get_dagster_logger().info(f"Temporary directory {tempdir.name} removed")
-    tempdir.cleanup()
+    # tempdir.close()
+    tempdir.rm_tempdir()
+
+
+# @op(
+#     ins={"start": In(Nothing)},
+#     required_resource_keys={"tempdir_resource"}
+# )
+# def remove_temp_dir(context, tempdir):
+#     # XXX this must always run!
+#     tempdir = context.resources.tempdir_resource
+#     get_dagster_logger().info(f"Temporary directory {tempdir.name} removed")
+#     # tempdir.close()
+#     tempdir.rm_tempdir()
 
 
 # @graph
@@ -218,12 +291,15 @@ def remove_temp_dir(context):
 
 @graph
 def mass_retrieve_and_extract(mass_fname):
-    retrieve_resp = run_cmd(retrieve_from_mass(mass_fname))
+    temp_dir = create_temp_dir(mass_fname)
+    retrieve_resp = run_cmd(retrieve_from_mass(temp_dir, mass_fname))
     logit(retrieve_resp)
-    extract_resp = run_cmd(extract_mass_retrieval(mass_fname, retrieve_resp))
-    unzip_cmds = filter_mass_retrieval(extract_resp)
+    extract_resp = run_cmd(extract_mass_retrieval(temp_dir, mass_fname, retrieve_resp))
+    unzip_cmds = filter_mass_retrieval(temp_dir, extract_resp)
     resps = unzip_cmds.map(run_cmd)
-    remove_temp_dir(start=logit(resps.collect()))
+    # logit(resps.collect())
+    remove_temp_dir(temp_dir, start=logit(resps.collect()))
+    # remove_temp_dir(temp_dir, start=dir_check(temp_dir))
 
 
 @job(
