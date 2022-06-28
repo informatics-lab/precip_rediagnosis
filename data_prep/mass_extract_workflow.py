@@ -176,13 +176,10 @@ def extract_mass_retrieval(context, temp_dir, mass_fname, _) -> str:
     return untar_cmd
 
 
-@op(required_resource_keys={"setup"}, out=DynamicOut())
-def filter_mass_retrieval(context, temp_dir, _) -> List[DynamicOutput[str]]:
+@op(required_resource_keys={"setup"})
+def filter_mass_retrieval(context, temp_dir, _) -> list:
     """Filter the extracted archive from MASS for specific files of interest."""
-    # temp_dir = context.resources.tempdir_resource
     filter_products = context.op_config["products"]
-    # get_dagster_logger().info(f"Temp directory: {temp_dir.name}")
-    # get_dagster_logger().info(f"Filter products: {filter_products}")
     variable_fname_template = context.op_config["variable_fname_template"]
     gunzip_files = []
     for product in filter_products:
@@ -193,7 +190,6 @@ def filter_mass_retrieval(context, temp_dir, _) -> List[DynamicOutput[str]]:
             area=context.op_config["variable_fname_area"]
         )
         gunzip_files.extend(glob.glob(os.path.join(temp_dir.name, variable_fname)))
-    # get_dagster_logger().info(f"First 10 files to unzip: {gunzip_files[:10]} ...")
 
     unzip_cmd_template = context.op_config["unzip_cmd"]
     dest_root = context.resources.setup["retrieve_path_root"]
@@ -208,9 +204,9 @@ def filter_mass_retrieval(context, temp_dir, _) -> List[DynamicOutput[str]]:
         )
         i = blake2b(salt=os.urandom(blake2b.SALT_SIZE)).hexdigest()[:16]
         unzip_cmds.append((f"unzip_{i}", unzip_cmd))
-        # yield DynamicOutput(unzip_cmd, mapping_key=f"unzip_{i}")
     get_dagster_logger().info(f"Unzip commands: {[cmd for (_, cmd) in unzip_cmds]}")
-    return [DynamicOutput(cmd, mapping_key=i) for (i, cmd) in unzip_cmds[:10]]
+    return [cmd for (_, cmd) in unzip_cmds]
+    # return [DynamicOutput(cmd, mapping_key=i) for (i, cmd) in unzip_cmds[:10]]
 
 
 @op(required_resource_keys={"setup"})
@@ -255,11 +251,25 @@ def mass_retrieve_and_extract(mass_fname):
     retrieve_resp = run_cmd(retrieve_from_mass(temp_dir, mass_fname))
     logit(retrieve_resp)
     extract_resp = run_cmd(extract_mass_retrieval(temp_dir, mass_fname, retrieve_resp))
-    unzip_cmds = filter_mass_retrieval(temp_dir, extract_resp)
-    resps = unzip_cmds.map(run_cmd)
+    unzip_cmds_list = filter_mass_retrieval(temp_dir, extract_resp)
+    return unzip_cmds_list
+    # return [temp_dir] + unzip_cmds_list
+    # resps = unzip_cmds.map(run_cmd)
     # logit(resps.collect())
-    remove_temp_dir(temp_dir, start=logit(resps.collect()))
+    # remove_temp_dir(temp_dir, start=logit(resps.collect()))
     # remove_temp_dir(temp_dir, start=dir_check(temp_dir))
+
+
+@op
+def gather(cmds):
+    tempdir, *unzip_cmds = cmds
+    return tempdir, unzip_cmds
+
+
+@op(out=DynamicOut())
+def dynamicise(l):
+    for i, l_itm in l:
+        yield DynamicOutput(l_itm, mapping_key=f"unzip_{i}")
 
 
 @job(
@@ -278,4 +288,8 @@ def mass_retrieve_and_extract(mass_fname):
 def mass_extract():
     dates = dates_to_extract()
     paths = get_mass_paths(dates)
-    paths.map(mass_retrieve_and_extract)
+    unzip_cmd_lists = paths.map(mass_retrieve_and_extract)
+    unzip_cmds = dynamicise(unzip_cmd_lists.collect())
+    results = unzip_cmds.map(run_cmd)
+    logit(results.collect())
+    # temp_dirs, unzip_cmd_lists = gather(unzip_cmds.collect())
