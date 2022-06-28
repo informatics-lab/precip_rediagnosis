@@ -235,20 +235,6 @@ def dir_check(tempdir):
     time.sleep(30)
 
 
-# @op(required_resource_keys={"setup"})
-# def create_temp_dir(context):
-#     retrieve_path_root = context.resources.setup["retrieve_path_root"]
-#     tempdir = TemporaryDirectory(prefix=retrieve_path_root)
-#     get_dagster_logger().info(f"Temporary extract directory: {tempdir.name}")
-#     return tempdir
-
-
-# @op
-# def remove_temp_dir_old(tempdir, _):
-#     get_dagster_logger().info(f"Temporary directory {tempdir.name} removed")
-#     tempdir.cleanup()
-
-
 @op(required_resource_keys={"tempdir_resource"})
 def create_temp_dir(context, _):
     tempdir = context.resources.tempdir_resource
@@ -257,36 +243,10 @@ def create_temp_dir(context, _):
 
 
 @op(ins={"start": In(Nothing)})
-def remove_temp_dir(context, tempdir):
+def remove_temp_dir(tempdir):
     # XXX this must always run!
-    # tempdir = context.resources.tempdir_resource
     get_dagster_logger().info(f"Temporary directory {tempdir.name} removed")
-    # tempdir.close()
     tempdir.rm_tempdir()
-
-
-# @op(
-#     ins={"start": In(Nothing)},
-#     required_resource_keys={"tempdir_resource"}
-# )
-# def remove_temp_dir(context, tempdir):
-#     # XXX this must always run!
-#     tempdir = context.resources.tempdir_resource
-#     get_dagster_logger().info(f"Temporary directory {tempdir.name} removed")
-#     # tempdir.close()
-#     tempdir.rm_tempdir()
-
-
-# @graph
-# def mass_retrieve_and_extract_old(mass_fname):
-#     tempdir = create_temp_dir()
-#     retrieve_resp = run_cmd(retrieve_from_mass(mass_fname, tempdir))
-#     _ = logit(retrieve_resp)
-#     extract_resp = run_cmd(extract_mass_retrieval(tempdir, mass_fname, retrieve_resp))
-#     unzip_cmds = filter_mass_retrieval(tempdir, extract_resp)
-#     resps = unzip_cmds.map(run_cmd)
-#     done = logit(resps.collect())
-#     remove_temp_dir(tempdir, done)
 
 
 @graph
