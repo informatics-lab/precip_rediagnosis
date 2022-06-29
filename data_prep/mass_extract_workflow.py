@@ -2,19 +2,21 @@ import atexit
 import datetime
 import glob
 from hashlib import blake2b
+# from itertools import chain
 import os
 import shutil
 import subprocess
 from tempfile import TemporaryDirectory, mkdtemp
-from typing import List
+from typing import Tuple
 
 from dagster import (
-    In, Nothing,
+    In, Nothing, Out,
     get_dagster_logger,
     graph, job, op, resource,
     make_values_resource,
     DynamicOut, DynamicOutput,
-    RetryRequested,
+    Backoff, Jitter, RetryPolicy, RetryRequested,
+    failure_hook, HookContext
 )
 import pandas as pd
 
@@ -89,6 +91,17 @@ def tempdir_resource(context):
     tempdir = EncapsulatedMkdTemp(prefix)
     get_dagster_logger().info(f"Temporary extract directory: {tempdir.name}")
     return tempdir
+
+
+@op(required_resource_keys={"setup"})
+def make_dest_root(context):
+    dest_root = context.resources.setup["retrieve_path_root"]
+    try:
+        os.mkdir(dest_root, mode=0o755)
+    except FileExistsError:
+        get_dagster_logger().info(f"Directory {dest_root!r} already exists; nothing to do.")
+    else:
+        get_dagster_logger().info(f"Created directory {dest_root!r}.")
 
 
 @op(required_resource_keys={"setup"})
@@ -193,7 +206,7 @@ def filter_mass_retrieval(context, temp_dir, _) -> list:
 
     unzip_cmd_template = context.op_config["unzip_cmd"]
     dest_root = context.resources.setup["retrieve_path_root"]
-    unzip_cmds = []
+    unzip_cmds = [temp_dir]
     for zip_file in gunzip_files:
         # XXX this won't work if our files have a file extension..?
         filename = os.path.splitext(os.path.basename(zip_file))[0]
@@ -202,10 +215,12 @@ def filter_mass_retrieval(context, temp_dir, _) -> list:
             zip_file=zip_file,
             dest_path=dest_path
         )
-        i = blake2b(salt=os.urandom(blake2b.SALT_SIZE)).hexdigest()[:16]
-        unzip_cmds.append((f"unzip_{i}", unzip_cmd))
-    get_dagster_logger().info(f"Unzip commands: {[cmd for (_, cmd) in unzip_cmds]}")
-    return [cmd for (_, cmd) in unzip_cmds]
+        # i = blake2b(salt=os.urandom(blake2b.SALT_SIZE)).hexdigest()[:16]
+        # unzip_cmds.append((f"unzip_{i}", unzip_cmd))
+        unzip_cmds.append(unzip_cmd)
+    # get_dagster_logger().info(f"Unzip commands: {[cmd for (_, cmd) in unzip_cmds]}")
+    return unzip_cmds
+    # return [cmd for (_, cmd) in unzip_cmds]
     # return [DynamicOutput(cmd, mapping_key=i) for (i, cmd) in unzip_cmds[:10]]
 
 
@@ -245,6 +260,18 @@ def remove_temp_dir(tempdir):
     tempdir.rm_tempdir()
 
 
+@failure_hook(required_resource_keys={"setup"})
+def on_fail_remove_tempdirs(context: HookContext):
+    dest_root = context.resources.setup["retrieve_path_root"]
+    tempdirs = list(os.walk(dest_root))[0][1]
+    if len(tempdirs):
+        for tempdir in tempdirs:
+            shutil.rmtree(os.path.join(dest_root, tempdir))
+        get_dagster_logger().info(f"Temporary directories removed: {tempdirs}")
+    else:
+        get_dagster_logger().info("No temporary directories found; nothing to clean up.")
+
+
 @graph
 def mass_retrieve_and_extract(mass_fname):
     temp_dir = create_temp_dir(mass_fname)
@@ -252,27 +279,36 @@ def mass_retrieve_and_extract(mass_fname):
     logit(retrieve_resp)
     extract_resp = run_cmd(extract_mass_retrieval(temp_dir, mass_fname, retrieve_resp))
     unzip_cmds_list = filter_mass_retrieval(temp_dir, extract_resp)
+    # return unzip_cmds_list
     return unzip_cmds_list
-    # return [temp_dir] + unzip_cmds_list
     # resps = unzip_cmds.map(run_cmd)
     # logit(resps.collect())
     # remove_temp_dir(temp_dir, start=logit(resps.collect()))
     # remove_temp_dir(temp_dir, start=dir_check(temp_dir))
 
 
-@op
+@op(out={"tempdirs_out": Out(), "cmds_out": Out()})
 def gather(cmds):
-    tempdir, *unzip_cmds = cmds
-    return tempdir, unzip_cmds
+    get_dagster_logger().info(f"Gather received: {cmds}")
+    tempdirs = []
+    unzip_cmds = []
+    for cmd_list in cmds:
+        tempdir, *unzip_cmds = cmd_list
+        tempdirs.append(tempdir)
+        unzip_cmds.extend(unzip_cmds)
+    return (tempdirs, unzip_cmds[:10])
 
 
 @op(out=DynamicOut())
 def dynamicise(l):
-    for i, l_itm in l:
+    # get_dagster_logger().info(f"Dynamicise received: {l}")
+    # for i, l_itm in enumerate(chain.from_iterable(l)):
+    for i, l_itm in enumerate(l):
         yield DynamicOutput(l_itm, mapping_key=f"unzip_{i}")
 
 
 @job(
+    hooks={on_fail_remove_tempdirs},
     resource_defs={
         "setup": make_values_resource(
             mass_root=str,
@@ -286,10 +322,17 @@ def dynamicise(l):
     }
 )
 def mass_extract():
+    make_dest_root()
     dates = dates_to_extract()
     paths = get_mass_paths(dates)
-    unzip_cmd_lists = paths.map(mass_retrieve_and_extract)
-    unzip_cmds = dynamicise(unzip_cmd_lists.collect())
-    results = unzip_cmds.map(run_cmd)
-    logit(results.collect())
-    # temp_dirs, unzip_cmd_lists = gather(unzip_cmds.collect())
+    graph_output = paths.map(mass_retrieve_and_extract)
+    tempdirs_list, unzip_cmds_list = gather(graph_output.collect())
+    unzip_cmds = dynamicise(unzip_cmds_list)
+    unzip_retry_policy = RetryPolicy(
+        delay=5, backoff=Backoff.EXPONENTIAL, jitter=Jitter.PLUS_MINUS
+    )
+    results = unzip_cmds.map(run_cmd.with_retry_policy(unzip_retry_policy))
+    # logit(results.collect())
+    tempdirs = dynamicise(tempdirs_list)
+    tempdirs.map(lambda tmp: remove_temp_dir(tmp, start=logit(results.collect())))
+    # remove_temp_dir(tempdirs, start=logit(results.collect()))
