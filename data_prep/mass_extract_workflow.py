@@ -1,11 +1,9 @@
-import atexit
 import datetime
 import glob
 import os
 import shutil
 import subprocess
 from tempfile import mkdtemp
-from typing import Tuple
 
 from dagster import (
     In, Nothing, Out,
@@ -13,7 +11,7 @@ from dagster import (
     graph, job, op, resource,
     make_values_resource,
     DynamicOut, DynamicOutput,
-    Backoff, Jitter, RetryPolicy,
+    Backoff, Jitter, RetryPolicy, RetryRequested,
     failure_hook, HookContext,
 )
 import pandas as pd
@@ -124,9 +122,7 @@ def get_mass_paths(context, dates):
 @op(required_resource_keys={"setup"})
 def retrieve_from_mass(context, temp_dir, mass_fname) -> str:
     """Get a file from MASS."""
-    mass_root = context.resources.setup["mass_root"]
     mass_get_cmd_template = context.op_config["mass_get_cmd"]
-    mass_path = os.path.join(mass_root, mass_fname)
     mass_get_cmd = mass_get_cmd_template.format(
         args=context.op_config["mass_get_args"],
         src_paths=mass_fname,
