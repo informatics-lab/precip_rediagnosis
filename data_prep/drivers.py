@@ -37,17 +37,26 @@ def run_shell_cmd(shell_cmd, logger):
     return cmd_output
 
 
-def get_logger(log_dir, logger_key):
+def get_logger(log_dir, logger_key, level='info'):
     current_time = datetime.datetime.now()
     logs_directory = pathlib.Path(log_dir)
     current_timestamp = '{ct.year:04d}{ct.month:02d}{ct.day:02d}{ct.hour:02d}{ct.minute:02d}{ct.second:02d}'.format(
         ct=current_time)
-    logger = logging.getLogger('extract_mass')
-    logger.setLevel(logging.INFO)
+
+    if level == 'info':
+        out_level= logging.INFO
+    elif level == 'debug':
+        out_level= logging.DEBUG
+    elif level == 'warning':
+        out_level=logging.WARNING
+    else:
+        out_level=logging.INFO
+    logging.basicConfig(level=out_level)
 
     formatter = logging.Formatter(
         '%(asctime)s | %(levelname)s | %(message)s',
         '%m-%d-%Y %H:%M:%S')
+    logger = logging.getLogger('extract_mass')
 
     handler1 = logging.FileHandler(
         logs_directory / f'extract_mass_{current_timestamp}.log')
@@ -59,6 +68,7 @@ def get_logger(log_dir, logger_key):
     handler1.setLevel(logging.INFO)
     handler1.setFormatter(formatter)
     logger.addHandler(handler1)
+    logger.info(f'logging level set to {level}')
     return logger
 
 def delete_file_list(path_list):
@@ -105,7 +115,7 @@ class MassExtractor():
         self._date_fname_template = opts_dict['date_fname_template']
         self._fname_extension_grid = opts_dict['fname_extension_grid']
         self._fname_extension_tabular = opts_dict['fname_extension_tabular']
-
+        self._output_level = opts_dict['output_level']
         self._merge_data = None
 
         self._create_logger()
@@ -120,7 +130,10 @@ class MassExtractor():
                                                   )
 
     def _create_logger(self):
-        self.logger = get_logger(self._log_dir, MassExtractor.LOGGER_KEY)
+        self.logger = get_logger(self._log_dir,
+                                 MassExtractor.LOGGER_KEY,
+                                 level=self._output_level,
+                                 )
 
     def extract(self):
         raise NotImplementedError()
@@ -198,6 +211,7 @@ class ModelStageExtractor(MassExtractor):
 
         leadtime_hours = self._opts['leadtime']
 
+        self.logger.debug('Calculating filename mapping')
         # load a cube for each variable in iris to get the actual variable name, and populate dictionary mapping from the var name in the file name to the variable as loaded into iris/xarray
         file_to_var_mapping = {
             var_file_name: iris.load_cube(
@@ -254,7 +268,7 @@ class ModelStageExtractor(MassExtractor):
             var_df_merged = []
             # heights_vars_marged = height_levels_df[height_levels_df.height==heights[0]][ merge_coords]
             for var1 in height_level_var_mappings.values():
-                self.logger.debug(var1)
+                self.logger.debug(f'var1')
                 # for h1 in heights:
                 #     heights_vars_marged[f'{var1}_{h1:.1f}'] = list(height_levels_df[height_levels_df.height==h1][var1])
                 var_at_heights = [hl_df_multirow[hl_df_multirow.height == h1][
@@ -407,6 +421,7 @@ class RadarExtractor(MassExtractor):
         self.logger.info(f'files output to {dest_root}')
 
     def prepare(self):
+        self.logger.debug('Output level debug')
         radar_days = self.dates_to_extract
         radar_fname_template = self._opts['intermediate_fname_template']
         product1 = 'composite_rainfall'
@@ -453,6 +468,8 @@ class RadarExtractor(MassExtractor):
         radar_crs = radar_cube.coord_system().as_cartopy_crs()
 
         #TODO: bundle the creation of the auxillary lat lon coordinates into a separate function
+
+        self.logger.debug('Calculating index mapping for target grid')
 
         # Create some helper arrays for converting from our radar grid to the mogreps-g grid
         proj_y_grid = numpy.tile(radar_cube.coord('projection_y_coordinate').points.reshape(radar_cube.shape[1],1), [1, radar_cube.shape[2]])
@@ -526,6 +543,18 @@ class RadarExtractor(MassExtractor):
             [len(self._target_time_range), target_grid_cube.shape[0],
              target_grid_cube.shape[1], len(rainfall_thresholds)])
 
+        bands_mask = numpy.ones(
+            [len(self._target_time_range), target_grid_cube.shape[0],
+             target_grid_cube.shape[1], len(rainfall_thresholds)],
+            dtype='bool',
+        )
+
+        scalar_value_mask = numpy.ones(
+            [len(self._target_time_range), target_grid_cube.shape[0],
+             target_grid_cube.shape[1]],
+            dtype='bool',
+        )
+
         max_rain_data = numpy.zeros(
             [len(self._target_time_range), target_grid_cube.shape[0],
              target_grid_cube.shape[1]])
@@ -540,6 +569,15 @@ class RadarExtractor(MassExtractor):
             [len(self._target_time_range), target_grid_cube.shape[0],
              target_grid_cube.shape[1]])
 
+        fraction_sum_agg = numpy.zeros(
+            [len(self._target_time_range), target_grid_cube.shape[0],
+             target_grid_cube.shape[1]])
+        fraction_sum_instant = numpy.zeros(
+            [len(self._target_time_range), target_grid_cube.shape[0],
+             target_grid_cube.shape[1]])
+
+
+        self.logger.debug('doing regridding operation from radar to target grid')
         # iterate through each time, rain amount band, latitude and longitude
         for i_time, validity_time in enumerate(validity_times):
             self.logger.debug(validity_time)
@@ -560,10 +598,10 @@ class RadarExtractor(MassExtractor):
                     selected_cells = (~(radar_select_time.data.mask)) & \
                                      (lat_target_index == i_lat) & (
                                                  lon_target_index == i_lon)
-                    self.logger.debug((~(radar_select_time.data.mask)) .sum(),
-                          (lat_target_index == i_lat).sum(),
-                          (lon_target_index == i_lon).sum(),
-                        selected_cells.sum(),
+                    self.logger.debug(f'{(~(radar_select_time.data.mask)).sum()},'
+                    f'{(lat_target_index == i_lat).sum()},'
+                    f'{(lon_target_index == i_lon).sum()},'
+                    f'{selected_cells.sum()},'
                           )
                     masked_radar.mask = ~selected_cells
                     masked_radar_instant.mask = ~selected_cells
@@ -572,8 +610,12 @@ class RadarExtractor(MassExtractor):
                     # only proceed with processing for this tagret grid cell
                     # if there are some radar grid cells within this target
                     # grid cell
-                    self.logger.debug(i_lat, i_lon)
+                    self.logger.debug(f'{i_lat}, {i_lon}')
                     if radar_cells_in_mg > 0:
+                        # set the values for this location to be unmasker,
+                        # as we have valid radar values for this location
+                        bands_mask[i_time, i_lat, i_lon, :] = False
+                        scalar_value_mask[i_time, i_lat, i_lon] = False
                         for imp_ix, (imp_key, imp_bounds) in enumerate(
                                 rainfall_thresholds.items()):
                             # calculate fraction in band for 3 horaggregate data
@@ -588,18 +630,29 @@ class RadarExtractor(MassExtractor):
                                 (masked_radar_instant.compressed() >= imp_bounds[0]) &
                                 (masked_radar_instant.compressed() <= imp_bounds[1]) )
                             bands_instant_data[i_time, i_lat, i_lon, imp_ix] = num_in_band_instant / radar_cells_in_mg
-                        self.logger.debug(bands_agg_data[i_time, i_lat, i_lon, :])
-                        self.logger.debug(bands_instant_data[i_time, i_lat, i_lon, :])
+                        # self.logger.debug(bands_agg_data[i_time, i_lat, i_lon, :])
+                        # self.logger.debug(bands_instant_data[i_time, i_lat, i_lon, :])
+                        fraction_sum_agg[i_time, i_lat, i_lon] = bands_agg_data[i_time, i_lat, i_lon, :].sum()
+                        self.logger.debug(f'sum of fractions agg {fraction_sum_agg[i_time, i_lat, i_lon] }')
+                        fraction_sum_instant[i_time, i_lat, i_lon] = bands_instant_data[i_time, i_lat, i_lon, :].sum()
+                        self.logger.debug(f'sum of fractions instant {fraction_sum_instant[i_time, i_lat, i_lon] }')
 
                         # calculate the max and average of all radar cells within each mogreps-g cell
                         max_rain_data[i_time, i_lat, i_lon] = masked_radar.max()
                         mean_rain_data[i_time, i_lat, i_lon] = (masked_radar.sum()) / radar_cells_in_mg
-                        self.logger.debug(mean_rain_data[i_time, i_lat, i_lon] , max_rain_data[i_time, i_lat, i_lon], )
+                        self.logger.debug(f'{mean_rain_data[i_time, i_lat, i_lon]} , {max_rain_data[i_time, i_lat, i_lon]},' )
 
                         # create instant radar rate feature data
                         max_rain_data_instant[i_time, i_lat, i_lon] = masked_radar_instant.max()
                         mean_rain_data_instant[i_time, i_lat, i_lon] = (masked_radar_instant.sum()) / radar_cells_in_mg
-                        self.logger.debug(mean_rain_data_instant[i_time, i_lat, i_lon], max_rain_data_instant[i_time, i_lat, i_lon])
+                        self.logger.debug(f'{mean_rain_data_instant[i_time, i_lat, i_lon]} , {max_rain_data_instant[i_time, i_lat, i_lon]},')
+                    else:
+                        self.logger.debug(f'no radar cells to include at ({i_lat},{i_lon})')
+
+        total_num_pts = fraction_sum_instant.shape[0] * fraction_sum_instant.shape[1] * fraction_sum_instant.shape[2]
+        self.logger.info(f' sum of fraction aggregate, number equal to 1, {(fraction_sum_agg == 1.0).sum()} of {total_num_pts}')
+
+        self.logger.info(f' sum of fraction instant, number equal to 1, {(fraction_sum_instant == 1.0).sum()} of {total_num_pts}')
 
         # pdb.set_trace()
 
@@ -620,7 +673,9 @@ class RadarExtractor(MassExtractor):
         )
         var_name_fraction_agg = 'radar_fraction_in_band_aggregate_3hr'
         fraction_agg_rain_band = iris.cube.Cube(
-            data=bands_agg_data,
+            data=numpy.ma.MaskedArray(data=bands_agg_data,
+                                      mask=bands_mask,
+                                      ),
             dim_coords_and_dims=(
             (radar_time_coord, 0), (target_lat_coord, 1), (target_lon_coord, 2),
             (band_coord, 3)),
@@ -631,7 +686,9 @@ class RadarExtractor(MassExtractor):
 
         var_name_fraction_instant = 'radar_fraction_in_band_instant'
         fraction_instant_rain_band = iris.cube.Cube(
-            data=bands_instant_data,
+            data=numpy.ma.MaskedArray(data=bands_instant_data,
+                                      mask=bands_mask,
+                                      ),
             dim_coords_and_dims=(
             (radar_time_coord, 0), (target_lat_coord, 1), (target_lon_coord, 2),
             (band_coord, 3)),
@@ -641,7 +698,9 @@ class RadarExtractor(MassExtractor):
         )
 
         max_rain_cube = iris.cube.Cube(
-            data=max_rain_data,
+            data=numpy.ma.MaskedArray(data=max_rain_data,
+                                      mask=scalar_value_mask,
+                                      ),
             dim_coords_and_dims=(
             (radar_time_coord, 0), (target_lat_coord, 1), (target_lon_coord, 2),),
             units='mm',
@@ -650,7 +709,9 @@ class RadarExtractor(MassExtractor):
         )
 
         mean_rain_cube = iris.cube.Cube(
-            data=mean_rain_data,
+            data=numpy.ma.MaskedArray(data=mean_rain_data,
+                                      mask=scalar_value_mask,
+                                      ),
             dim_coords_and_dims=(
             (radar_time_coord, 0), (target_lat_coord, 1), (target_lon_coord, 2),),
             units='mm',
@@ -659,7 +720,9 @@ class RadarExtractor(MassExtractor):
         )
 
         max_rain_instant_cube = iris.cube.Cube(
-            data=max_rain_data_instant,
+            data=numpy.ma.MaskedArray(data=max_rain_data_instant,
+                                      mask=scalar_value_mask,
+                                      ),
             dim_coords_and_dims=(
                 (radar_time_coord, 0), (target_lat_coord, 1),
                 (target_lon_coord, 2),),
@@ -667,13 +730,16 @@ class RadarExtractor(MassExtractor):
             var_name='radar_max_rain_instant',
             long_name='maximum rain in radar cells within mogreps-g cell',
         )
-
+        var_name_mean_instant = 'radar_mean_rain_instant'
         mean_rain_instant_cube = iris.cube.Cube(
-            data=mean_rain_data_instant,
+            data=numpy.ma.MaskedArray(data=mean_rain_data_instant,
+                                      mask=scalar_value_mask,
+                                      ),
             dim_coords_and_dims=(
                 (radar_time_coord, 0), (target_lat_coord, 1),
                 (target_lon_coord, 2),),
             units='mm',
+            var_name=var_name_mean_instant,
             long_name='average rain in radar cells within mogreps-g cell',
         )
 
@@ -725,12 +791,19 @@ class RadarExtractor(MassExtractor):
                                     on=['time', 'latitude', 'longitude'])
 
         # merge in max and mean fields to the fraction in band fields.
-        radar_df = pandas.merge(radar_df, xarray.DataArray.from_iris(
-            mean_rain_cube).to_dataframe().reset_index(),
+        scalar_cube_list = [mean_rain_cube,
+                            max_rain_cube,
+                            mean_rain_instant_cube,
+                            max_rain_instant_cube]
+        for cube1 in scalar_cube_list:
+            radar_df = pandas.merge(radar_df, xarray.DataArray.from_iris(
+                cube1).to_dataframe().reset_index(),
                                 on=['time', 'latitude', 'longitude'])
-        radar_df = pandas.merge(radar_df, xarray.DataArray.from_iris(
-            max_rain_cube).to_dataframe().reset_index(),
-                                on=['time', 'latitude', 'longitude'])
+
+        # find where the fields are NaN, and exclude those from the table.
+        # These represent the values masked out because there are no radar
+        # cells in the paticular mogreps-g cells.
+        radar_df = radar_df[~(radar_df[var_name_mean_instant].isna())]
 
         radar_tab_fname = (self._opts['radar_fname_prefix'] + '_' +
                            fname_timestamp + self._fname_extension_tabular

@@ -39,6 +39,12 @@ def get_args():
                          default='target_cube.nc',
                          )
 
+    parser1.add_argument('--output-level',
+                         dest='output_level',
+                         help='Level of output in the logs.',
+                         default='info',
+                         )
+
     args1 = parser1.parse_args()
     return args1
 
@@ -48,7 +54,9 @@ def merge_data(drivers_list, merge_vars, output_path):
 
 def main():
     cmd_args = get_args()
-    logger1 = drivers.get_logger(cmd_args.log_dir, drivers.MassExtractor.LOGGER_KEY)
+    logger1 = drivers.get_logger(cmd_args.log_dir,
+                                 drivers.MassExtractor.LOGGER_KEY,
+                                 cmd_args.output_level)
     logger1.info('Running extract and prepare workflow for precip rediagnosis.')
     logger1.info(f'reading config from {cmd_args.config_file}')
     with open(cmd_args.config_file) as config_file:
@@ -70,6 +78,7 @@ def main():
         'date_fname_template': dataset_config['date_fname_template'],
         'fname_extension_grid': dataset_config['fname_extension_grid'],
         'fname_extension_tabular': dataset_config['fname_extension_tabular'],
+        'output_level': cmd_args.output_level,
     }
     driver_list = []
     for data_source_cfg in dataset_config['data_sources']:
