@@ -1,12 +1,10 @@
 import atexit
 import datetime
 import glob
-from hashlib import blake2b
-# from itertools import chain
 import os
 import shutil
 import subprocess
-from tempfile import TemporaryDirectory, mkdtemp
+from tempfile import mkdtemp
 from typing import Tuple
 
 from dagster import (
@@ -15,40 +13,10 @@ from dagster import (
     graph, job, op, resource,
     make_values_resource,
     DynamicOut, DynamicOutput,
-    Backoff, Jitter, RetryPolicy, RetryRequested,
-    failure_hook, HookContext
+    Backoff, Jitter, RetryPolicy,
+    failure_hook, HookContext,
 )
 import pandas as pd
-
-
-class EncapsulatedTemporaryDir(object):
-    def __init__(self, prefix):
-        self.prefix = prefix
-        if not self.prefix.endswith(os.sep):
-            self.prefix += os.sep
-
-        self._tempdir = None
-        self.mk_tempdir()
-
-    @property
-    def tempdir(self):
-        if self._tempdir is None:
-            self.mk_tempdir()
-        return self._tempdir
-
-    @tempdir.setter
-    def tempdir(self, value):
-        self._tempdir = value
-
-    @property
-    def name(self):
-        return self.tempdir.name
-
-    def mk_tempdir(self):
-        self.tempdir = TemporaryDirectory(prefix=self.prefix)
-
-    def rm_tempdir(self):
-        self.tempdir.cleanup()
 
 
 class EncapsulatedMkdTemp(object):
@@ -59,9 +27,6 @@ class EncapsulatedMkdTemp(object):
 
         self._tempdir = None
         self.mk_tempdir()
-
-        # Automatic cleanup on process exit.
-        # atexit.register(self.rm_tempdir)
 
     @property
     def tempdir(self):
@@ -87,7 +52,6 @@ class EncapsulatedMkdTemp(object):
 @resource(required_resource_keys={"setup"})
 def tempdir_resource(context):
     prefix = context.resources.setup["retrieve_path_root"]
-    # tempdir = EncapsulatedTemporaryDir(prefix)
     tempdir = EncapsulatedMkdTemp(prefix)
     get_dagster_logger().info(f"Temporary extract directory: {tempdir.name}")
     return tempdir
@@ -160,10 +124,8 @@ def get_mass_paths(context, dates):
 @op(required_resource_keys={"setup"})
 def retrieve_from_mass(context, temp_dir, mass_fname) -> str:
     """Get a file from MASS."""
-    # temp_dir = context.resources.tempdir_resource
     mass_root = context.resources.setup["mass_root"]
     mass_get_cmd_template = context.op_config["mass_get_cmd"]
-    # dest_path = os.path.join(temp_dir.name, context.resources.setup["dest_path"])
     mass_path = os.path.join(mass_root, mass_fname)
     mass_get_cmd = mass_get_cmd_template.format(
         args=context.op_config["mass_get_args"],
@@ -176,10 +138,7 @@ def retrieve_from_mass(context, temp_dir, mass_fname) -> str:
 @op
 def extract_mass_retrieval(context, temp_dir, mass_fname, _) -> str:
     """Extract a tar archive file retrieved from MASS."""
-    # temp_dir = context.resources.tempdir_resource
     untar_cmd_template = context.op_config["untar_cmd"]
-    # dest_path = context.resources.setup["dest_path"]
-    # extract_path = os.path.join(temp_dir.name, dest_path)
     mass_tar_name = os.path.basename(mass_fname)
     extracted_tar_name = os.path.join(temp_dir.name, mass_tar_name)
     untar_cmd = untar_cmd_template.format(
@@ -215,13 +174,8 @@ def filter_mass_retrieval(context, temp_dir, _) -> list:
             zip_file=zip_file,
             dest_path=dest_path
         )
-        # i = blake2b(salt=os.urandom(blake2b.SALT_SIZE)).hexdigest()[:16]
-        # unzip_cmds.append((f"unzip_{i}", unzip_cmd))
         unzip_cmds.append(unzip_cmd)
-    # get_dagster_logger().info(f"Unzip commands: {[cmd for (_, cmd) in unzip_cmds]}")
     return unzip_cmds
-    # return [cmd for (_, cmd) in unzip_cmds]
-    # return [DynamicOutput(cmd, mapping_key=i) for (i, cmd) in unzip_cmds[:10]]
 
 
 @op(required_resource_keys={"setup"})
@@ -239,13 +193,6 @@ def logit(context, responses):
         get_dagster_logger().info(path)
 
 
-@op
-def dir_check(tempdir):
-    import time
-    get_dagster_logger().info(f"Temporary directory: {tempdir.name!r}")
-    time.sleep(30)
-
-
 @op(required_resource_keys={"tempdir_resource"})
 def create_temp_dir(context, _):
     tempdir = context.resources.tempdir_resource
@@ -255,7 +202,6 @@ def create_temp_dir(context, _):
 
 @op(ins={"start": In(Nothing)})
 def remove_temp_dir(tempdir):
-    # XXX this must always run!
     get_dagster_logger().info(f"Temporary directory {tempdir.name} removed")
     tempdir.rm_tempdir()
 
@@ -279,16 +225,17 @@ def mass_retrieve_and_extract(mass_fname):
     logit(retrieve_resp)
     extract_resp = run_cmd(extract_mass_retrieval(temp_dir, mass_fname, retrieve_resp))
     unzip_cmds_list = filter_mass_retrieval(temp_dir, extract_resp)
-    # return unzip_cmds_list
     return unzip_cmds_list
-    # resps = unzip_cmds.map(run_cmd)
-    # logit(resps.collect())
-    # remove_temp_dir(temp_dir, start=logit(resps.collect()))
-    # remove_temp_dir(temp_dir, start=dir_check(temp_dir))
 
 
 @op(out={"tempdirs_out": Out(), "cmds_out": Out()})
 def gather(cmds):
+    """
+    Gather lists of collected results from dynamic graph execution.
+    Also sort the results, as the results list has been overloaded to
+    contain the temporary directory name as the 0th item in the list.
+
+    """
     get_dagster_logger().info(f"Gather received: {cmds}")
     tempdirs = []
     unzip_cmds = []
@@ -296,13 +243,12 @@ def gather(cmds):
         tempdir, *unzip_cmds = cmd_list
         tempdirs.append(tempdir)
         unzip_cmds.extend(unzip_cmds)
-    return (tempdirs, unzip_cmds[:10])
+    return (tempdirs, unzip_cmds)
 
 
 @op(out=DynamicOut())
 def dynamicise(l):
-    # get_dagster_logger().info(f"Dynamicise received: {l}")
-    # for i, l_itm in enumerate(chain.from_iterable(l)):
+    """Convert an ordinary Python iterable `l` into a dagster dynamic output."""
     for i, l_itm in enumerate(l):
         yield DynamicOutput(l_itm, mapping_key=f"unzip_{i}")
 
@@ -332,7 +278,5 @@ def mass_extract():
         delay=5, backoff=Backoff.EXPONENTIAL, jitter=Jitter.PLUS_MINUS
     )
     results = unzip_cmds.map(run_cmd.with_retry_policy(unzip_retry_policy))
-    # logit(results.collect())
     tempdirs = dynamicise(tempdirs_list)
     tempdirs.map(lambda tmp: remove_temp_dir(tmp, start=logit(results.collect())))
-    # remove_temp_dir(tempdirs, start=logit(results.collect()))
