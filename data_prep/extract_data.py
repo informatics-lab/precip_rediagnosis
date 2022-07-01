@@ -106,7 +106,7 @@ def main():
     merged_output_path = pathlib.Path(cmd_args.output_path) / merged_fname
     logger1.info(f'writing merged dataframe to {merged_output_path}')
 
-    merged_df.to_csv(merged_output_path)
+    merged_df.to_csv(merged_output_path, index=False)
     logger1.info('processing completed successfully.')
 if __name__ == '__main__':
     main()
