@@ -21,6 +21,7 @@ from sklearn.metrics import mean_absolute_error, r2_score
 
 # azure specific imports
 import azureml.core
+import fsspec
 
 import pickle
 
@@ -93,7 +94,10 @@ def sample_data(features_df, target_df, test_fraction=0.2, savefn=None, random_s
     train_target = target_df[~np.isin(target_df.index, test_features.index)]
     if savefn:
         test_dataset = pd.concat([test_features, test_target], axis=1, sort=False)
-        test_dataset.to_csv(savefn)
+        # fsspec_handle = fsspec.open('abfs://prd-storm-dennis/test.csv', account_name='preciprediagnosisstorage', account_key='iYKxEvaDXqYuuBwpQxQggLCiPfHg4QX6EWF553o+yJp3YLpMGABKZTHtGTvEvz8ttSJblZFv163ri4UnWbz3YQ==', mode='wt')
+        fsspec_handle = fsspec.open('abfs://prd-storm-dennis/test.csv', account_name='preciprediagnosisstorage', account_key=storage_acc_key, mode='wt')
+        with fsspec_handle.open() as f:
+            test_dataset.to_csv(f)
         return train_features, train_target
     else: 
         return train_features, train_target, test_features, test_target
@@ -157,12 +161,12 @@ def preprocess_data(input_data, feature_dict, test_fraction=0.2, test_savefn=Non
     features = data[prof_feature_columns + feature_dict['single_level']]
     target = data[[feature_dict['target']]]
     
-    # Extract and save test dataset
-    reduced_features, reduced_target = sample_data(
-        features, target,
-        test_fraction=test_fraction,
-        savefn=test_savefn,
-        random_state=0)
+    # # Extract and save test dataset
+    # reduced_features, reduced_target = sample_data(
+    #     features, target,
+    #     test_fraction=test_fraction,
+    #     savefn=test_savefn,
+    #     random_state=0)
 
     # Extract and return train and validate datasets
     X_train, y_train, X_val, y_val = sample_data(
