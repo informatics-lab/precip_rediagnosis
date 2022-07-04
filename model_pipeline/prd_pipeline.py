@@ -5,7 +5,6 @@ import pathlib
 
 # third party imports
 import numpy as np
-
 import pandas as pd
 
 import tensorflow as tf
@@ -170,8 +169,17 @@ def preprocess_data(input_data, feature_dict, test_fraction=0.2, test_savefn=Non
     # drop NaN values in the dataset
     data = input_data.dropna()
 
-    # drop data points with zero precip in the radar data
-    data = data[data[feature_dict['target']]>0]
+    
+    if len(feature_dict['target']) > 1:
+        # If feature_dict['target'] is length greater than 1, then the target 
+        # is a set of intensity bands and so we drop data where the
+        # smallest intensity band has a fraction of 1 
+        # i.e. all radar cells in the model cell are in the lowest intensity band
+        data = data[data[feature_dict['target'][0]]!=1]
+    else:
+        # If feature_dict['target'] is length 1, then either mean or max precip is the target and so 
+        # we drop data points with zero precip in the radar data
+        data = data[data[feature_dict['target']]>0]
 
     # Get a list of columns names for profile features
     prof_feature_columns = [s for s in data.columns for vars in feature_dict['profile'] if s.startswith(vars)]
@@ -182,9 +190,11 @@ def preprocess_data(input_data, feature_dict, test_fraction=0.2, test_savefn=Non
         'nheights' : len(prof_feature_columns)//len(feature_dict['profile']),
         'nsinglvl_features' :len(feature_dict['single_level']),
     }
+    if len(feature_dict['target']) > 1:
+        data_dims_dict['nbands'] = len(feature_dict['target'])
     
     input_data = data[prof_feature_columns + feature_dict['single_level']]
-    target_data = data[[feature_dict['target']]]
+    target_data = data[list(feature_dict['target'])]
     
     random_state = np.random.RandomState()  # TO DO: how to log this in experiments!
 
@@ -242,4 +252,3 @@ def calc_metrics(current_run, data_splits, y_pred):
     for k1, v1 in metrics_dict.items():
         current_run.log(k1, v1)
     return metrics_dict
-    
