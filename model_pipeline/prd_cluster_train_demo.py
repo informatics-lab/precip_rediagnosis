@@ -26,9 +26,12 @@ def get_args():
     parser.add_argument('--epochs', dest='epochs', type=int)
     parser.add_argument('--batch-size', dest='batch_size', type=int)
     parser.add_argument('--learning-rate', dest='learning_rate', type=float)
-                 
+    parser.add_argument('--test-fraction', dest='test_frac', type=float)
+    parser.add_argument('--test-filename', dest='test_filename', type=float)
+
     args = parser.parse_args()
     return args
+
 
 def main():
     
@@ -49,7 +52,7 @@ def main():
     input_data = prd_pipeline.load_data(prd_ws, args.dataset_name)
     data_splits, data_dims = prd_pipeline.preprocess_data(
         input_data, feature_dict, 
-        test_fraction=0.2, test_savefn='tmp.csv')  # TODO: update filename! Currently saves local copy of test dataset - perhaps not optimal
+        test_fraction=args.test_frac, test_savefn=args.test_filename)
 
     model = prd_pipeline.build_model(**data_dims)
     
