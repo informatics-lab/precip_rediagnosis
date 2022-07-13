@@ -295,6 +295,8 @@ class ModelStageExtractor(MassExtractor):
             # gridded_data_list += [xarray.merge([height_levels_ds, single_level_ds])]
 
         prd_column_dataset = pandas.concat(ts_data_list)
+        # import pdb
+        # pdb.set_trace()
 
         fname_timestamp = self._date_fname_template.format(
             start=prd_column_dataset['time'].min(),
@@ -302,7 +304,7 @@ class ModelStageExtractor(MassExtractor):
         model_output_fname = self._opts['model_fname_prefix'] + '_' + self._opts['leadtime_template'].format(lt=leadtime_hours) + '_' + fname_timestamp + self._fname_extension_tabular
         model_output_path = output_dir / model_output_fname
         self.logger.info(f'outputting model data to {model_output_path}')
-        prd_column_dataset.to_csv(model_output_path)
+        prd_column_dataset.to_csv(model_output_path, index=False)
 
         # Assign the output variable to the correct memeber variable
         # for subsequent merging
@@ -623,13 +625,13 @@ class RadarExtractor(MassExtractor):
                                 (masked_radar.compressed() >= imp_bounds[0]) &
                                 (masked_radar.compressed() <= imp_bounds[1]) )
                             bands_agg_data[
-                                i_time, i_lat, i_lon, imp_ix] = num_in_band_agg / radar_cells_in_mg
+                                i_time, i_lat, i_lon, imp_ix] = num_in_band_agg / (len(masked_radar.compressed()))
 
                             # calculate raction in band for instant radar data
                             num_in_band_instant = numpy.count_nonzero(
                                 (masked_radar_instant.compressed() >= imp_bounds[0]) &
                                 (masked_radar_instant.compressed() <= imp_bounds[1]) )
-                            bands_instant_data[i_time, i_lat, i_lon, imp_ix] = num_in_band_instant / radar_cells_in_mg
+                            bands_instant_data[i_time, i_lat, i_lon, imp_ix] = num_in_band_instant / (len(masked_radar_instant.compressed()))
                         # self.logger.debug(bands_agg_data[i_time, i_lat, i_lon, :])
                         # self.logger.debug(bands_instant_data[i_time, i_lat, i_lon, :])
                         fraction_sum_agg[i_time, i_lat, i_lon] = bands_agg_data[i_time, i_lat, i_lon, :].sum()
@@ -648,11 +650,14 @@ class RadarExtractor(MassExtractor):
                         self.logger.debug(f'{mean_rain_data_instant[i_time, i_lat, i_lon]} , {max_rain_data_instant[i_time, i_lat, i_lon]},')
                     else:
                         self.logger.debug(f'no radar cells to include at ({i_lat},{i_lon})')
+            # import pdb
+            # pdb.set_trace()
+
 
         total_num_pts = fraction_sum_instant.shape[0] * fraction_sum_instant.shape[1] * fraction_sum_instant.shape[2]
-        self.logger.info(f' sum of fraction aggregate, number equal to 1, {(fraction_sum_agg == 1.0).sum()} of {total_num_pts}')
+        self.logger.info(f' sum of fraction aggregate, number equal to 1, {(fraction_sum_agg > 0.999 ).sum()} of {total_num_pts}')
 
-        self.logger.info(f' sum of fraction instant, number equal to 1, {(fraction_sum_instant == 1.0).sum()} of {total_num_pts}')
+        self.logger.info(f' sum of fraction instant, number equal to 1, {(fraction_sum_instant > 0.999).sum()} of {total_num_pts}')
 
         # pdb.set_trace()
 
@@ -696,6 +701,15 @@ class RadarExtractor(MassExtractor):
             var_name=var_name_fraction_instant,
             long_name='Fraction radar rainfall cells in specified rain band',
         )
+
+
+        num_cells_cube = iris.cube.Cube(
+            data=num_cells,
+            dim_coords_and_dims=(
+             (target_lat_coord, 0), (target_lon_coord, 1),),
+            var_name='num_radar_cells',
+        )
+
 
         max_rain_cube = iris.cube.Cube(
             data=numpy.ma.MaskedArray(data=max_rain_data,
@@ -750,6 +764,7 @@ class RadarExtractor(MassExtractor):
              mean_rain_cube,
              max_rain_instant_cube,
              mean_rain_instant_cube,
+             num_cells_cube,
              ])
 
         output_dir = self._dest_path
@@ -808,7 +823,7 @@ class RadarExtractor(MassExtractor):
         radar_tab_fname = (self._opts['radar_fname_prefix'] + '_' +
                            fname_timestamp + self._fname_extension_tabular
                            )
-        radar_df.to_csv(output_dir / radar_tab_fname)
+        radar_df.to_csv(output_dir / radar_tab_fname, index=False)
 
         # Assign the output variable to the correct memeber variable
         # for subsequent merging
