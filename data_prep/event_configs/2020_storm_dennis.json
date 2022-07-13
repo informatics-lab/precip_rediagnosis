@@ -1,0 +1,104 @@
+{
+  "event_name": "storm_dennis",
+  "Event description": " This is a large storm for which there was a lot of rainfall, with a red rainfall warning.",
+  "science_info": [
+    "https://www.metoffice.gov.uk/weather/warnings-and-advice/uk-storm-centre/storm-dennis",
+    "https://www.metoffice.gov.uk/binaries/content/assets/metofficegovuk/pdf/weather/learn-about/uk-past-events/interesting/2020/2020_03_storm_dennis.pdf"
+  ],
+  "event_start": "2020-02-14T18:00Z",
+  "event_end": "2020-02-17T18:00Z",
+  "target_time_delta": 6,
+  "date_fname_template": "{start.year:04d}{start.month:02d}{start.day:02d}T{start.hour:02d}{start.minute:02d}Z_{end.year:04d}{end.month:02d}{end.day:02d}T{end.hour:02d}{end.minute:02d}Z",
+  "fname_extension_grid": ".nc",
+  "fname_extension_tabular": ".csv",
+  "merge_vars": [ "latitude", "longitude", "time"],
+  "merged_outpout_prefix": "prd_merged",
+  "data_sources": [
+{
+      "data_type": "radar",
+      "dataset": "radar",
+      "data_extractor": "RadarExtractor",
+      "source_root": "moose:/adhoc/projects/radar_archive/data/comp/products/composites/",
+      "fname_mass_template": "{dt.year:04d}{dt.month:02d}{dt.day:02d}.tar",
+      "variable_fname_template": "{timestamp}_{product}_{resolution}_{area}",
+      "intermediate_fname_template": "{product}_{selected_day.year:04d}{selected_day.month:02d}{selected_day.day}.nc",
+      "archive_time_chunk": 24,
+      "products": {
+        "composite_rainfall": "nimrod_ng_radar_rainrate_composite",
+        "composite_quality": "nimrod_ng_radar_qualityproduct_composite"
+      },
+      "resolution": "1km",
+      "area": "UK",
+      "radar_fname_prefix": "prd_radar",
+
+      "rainfall_thresholds": {
+        "0.0": [0.0, 0.027],
+        "0.03": [0.027, 0.033],
+        "0.09": [0.033, 0.099],
+        "0.1": [0.099, 0.11],
+        "0.25": [0.11, 0.275],
+        "0.3": [0.275, 0.33],
+        "0.5": [0.33, 0.55],
+        "1.0": [0.55, 1.1],
+        "2.0": [1.1, 2.2],
+        "3.0": [2.2, 3.3],
+        "4.0": [3.3, 4.4],
+        "8.0": [4.4, 8.8],
+        "12.0": [8.8, 13.2],
+        "16.0": [13.2, 17.6],
+        "20.0": [17.6, 22.0],
+        "25.0": [22.0, 27.5],
+        "30.0": [27.5, 33.0],
+        "40.0": [33.0, 44.0],
+        "50.0": [44.0, 55.0],
+        "75.0": [55.0, 82.5],
+        "100.0": [82.5, 110.0],
+        "150.0": [110.0, 165.0],
+        "200.0": [165.0, 220.0]
+      }
+    },
+    {
+      "data_type": "model_ensemble",
+      "data_extractor": "ModelStageExtractor",
+      "height_level_variables": [
+        "cloud_amount_on_height_levels",
+        "relative_humidity_on_height_levels",
+        "pressure_on_height_levels",
+        "temperature_on_height_levels",
+        "wind_direction_on_height_levels",
+        "wind_speed_on_height_levels"
+      ],
+      "single_level_variables": [
+        "cloud_amount_of_total_cloud",
+        "rainfall_accumulation-PT03H",
+        "snowfall_accumulation-PT03H",
+        "rainfall_rate",
+        "snowfall_rate",
+        "height_of_orography",
+        "pressure_at_mean_sea_level",
+        "rainfall_rate",
+        "rainfall_rate_from_convection",
+        "rainfall_accumulation-PT03H",
+        "rainfall_accumulation_from_convection-PT03H",
+        "snowfall_rate",
+        "snowfall_rate_from_convection",
+        "snowfall_accumulation-PT03H",
+        "snowfall_accumulation_from_convection-PT03H",
+        "rainfall_rate_max-PT03H",
+        "rainfall_rate_from_convection_max-PT03H",
+        "snowfall_rate_max-PT03H",
+        "snowfall_rate_from_convection_max-PT03H"
+      ],
+      "source_root": "moose:/opfc/atm",
+      "dataset": "mogreps-g",
+      "subset": "lev1",
+      "leadtime": 6,
+      "time_delta": 6,
+      "leadtime_template": "{lt:03d}H",
+      "number_of_realisations": 35,
+     "forecast_ref_template": "{frt.year:04d}{frt.month:02d}{frt.day:02d}T{frt.hour:02d}00Z.nc.file",
+      "fname_template": "{vt.year:04d}{vt.month:02d}{vt.day:02d}T{vt.hour:02d}00Z-PT{lead_time:04d}H00M-{var_name}.nc",
+      "model_fname_prefix": "prd_mogreps_g"
+    }
+  ]
+}
