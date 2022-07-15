@@ -3,7 +3,7 @@ resources:
     config:
       mass_root: moose:/adhoc/projects/radar_archive/data/comp/products/composites/
       retrieve_path_root: /scratch/dkillick/precip_rediagnosis/radar/
-      dest_path: radar
+      workflow_path: tmp
       sep: " :: "
       logdir: "."
       logfile: retrieved.log
@@ -17,6 +17,17 @@ ops:
   get_mass_paths:
     config:
       mass_filename_template: "{dt.year:04d}{dt.month:02d}{dt.day:02d}.tar"
+  dates_and_products:
+    config:
+      products:
+        - nimrod_ng_radar_rainrate_composite
+        - nimrod_ng_radar_qualityproduct_composite
+  save_radar_day_cube:
+    config:
+      variable_fname_template: "{timestamp}_{product}_{resolution}_{area}"
+      nc_fname_template: "{product}_{date_str}.nc"
+      variable_fname_resolution: 1km
+      variable_fname_area: UK
   mass_retrieve_and_extract:
     ops:
       retrieve_from_mass:
