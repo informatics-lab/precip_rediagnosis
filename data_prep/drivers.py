@@ -295,8 +295,6 @@ class ModelStageExtractor(MassExtractor):
             # gridded_data_list += [xarray.merge([height_levels_ds, single_level_ds])]
 
         prd_column_dataset = pandas.concat(ts_data_list)
-        # import pdb
-        # pdb.set_trace()
 
         fname_timestamp = self._date_fname_template.format(
             start=prd_column_dataset['time'].min(),
@@ -535,7 +533,6 @@ class RadarExtractor(MassExtractor):
                 lon_target_index[arr1, arr2] = i_lon
                 lat_target_index[arr1, arr2] = i_lat
                 num_cells[i_lat, i_lon] = len(arr1)
-        # import pdb
 
         # Set up arrays to store regridded radAR precip data
         bands_agg_data = numpy.zeros(
@@ -594,7 +591,6 @@ class RadarExtractor(MassExtractor):
             masked_radar_instant = numpy.ma.MaskedArray(
                 radar_instant_select_time.data.data,
                 radar_cube[0].data.mask)
-            # pdb.set_trace()
             for i_lat in range(target_grid_cube.shape[0]):
                 for i_lon in range(target_grid_cube.shape[1]):
                     selected_cells = (~(radar_select_time.data.mask)) & \
@@ -650,8 +646,6 @@ class RadarExtractor(MassExtractor):
                         self.logger.debug(f'{mean_rain_data_instant[i_time, i_lat, i_lon]} , {max_rain_data_instant[i_time, i_lat, i_lon]},')
                     else:
                         self.logger.debug(f'no radar cells to include at ({i_lat},{i_lon})')
-            # import pdb
-            # pdb.set_trace()
 
 
         total_num_pts = fraction_sum_instant.shape[0] * fraction_sum_instant.shape[1] * fraction_sum_instant.shape[2]
@@ -659,7 +653,6 @@ class RadarExtractor(MassExtractor):
 
         self.logger.info(f' sum of fraction instant, number equal to 1, {(fraction_sum_instant > 0.999).sum()} of {total_num_pts}')
 
-        # pdb.set_trace()
 
         target_lat_coord = target_grid_cube.coord('latitude')
         target_lon_coord = target_grid_cube.coord('longitude')
@@ -686,7 +679,7 @@ class RadarExtractor(MassExtractor):
             (band_coord, 3)),
             units=None,
             var_name= var_name_fraction_agg,
-            long_name='Fraction radar rainfall cells in specified rain band',
+            long_name='Fraction radar rainfall cells in specified 3hr aggregate rain band ',
         )
 
         var_name_fraction_instant = 'radar_fraction_in_band_instant'
@@ -699,7 +692,7 @@ class RadarExtractor(MassExtractor):
             (band_coord, 3)),
             units=None,
             var_name=var_name_fraction_instant,
-            long_name='Fraction radar rainfall cells in specified rain band',
+            long_name='Fraction radar rainfall cells in specified instant rain band',
         )
 
 
@@ -785,13 +778,21 @@ class RadarExtractor(MassExtractor):
 
         # restructure the dataframe, so that fractions in different bands are
         # separate coumns (features), rather than different data points (rows)
-        radar_df = frac_agg_df[frac_agg_df['band'] == float(rain_bands[0])][
-            ['time', 'latitude', 'longitude', var_name_fraction_agg]]
-        radar_df = radar_df.rename(
-            {var_name_fraction_agg: f'{var_name_fraction_agg}_{rain_bands[0]}'},
-            axis='columns')
+        scalar_cube_list = [mean_rain_cube,
+                            max_rain_cube,
+                            mean_rain_instant_cube,
+                            max_rain_instant_cube]
 
-        for band1 in rain_bands[1:]:
+        # first merge the min and max fields
+        radar_df = functools.reduce(
+            lambda x, y: pandas.merge(x, y, on=('latitude',
+                                                'longitude',
+                                                'time')),
+            (xarray.DataArray.from_iris(arr1).to_dataframe().reset_index()
+             for arr1 in scalar_cube_list))
+
+        # next merge in the fraction of intensity bands one at a time
+        for band1 in rain_bands:
             df1 = frac_agg_df[frac_agg_df['band'] == float(band1)][
                 ['time', 'latitude', 'longitude', var_name_fraction_agg]]
             df1 = df1.rename({var_name_fraction_agg: f'{var_name_fraction_agg}_{band1}'},
@@ -804,16 +805,6 @@ class RadarExtractor(MassExtractor):
                              axis='columns')
             radar_df = pandas.merge(radar_df, df1,
                                     on=['time', 'latitude', 'longitude'])
-
-        # merge in max and mean fields to the fraction in band fields.
-        scalar_cube_list = [mean_rain_cube,
-                            max_rain_cube,
-                            mean_rain_instant_cube,
-                            max_rain_instant_cube]
-        for cube1 in scalar_cube_list:
-            radar_df = pandas.merge(radar_df, xarray.DataArray.from_iris(
-                cube1).to_dataframe().reset_index(),
-                                on=['time', 'latitude', 'longitude'])
 
         # find where the fields are NaN, and exclude those from the table.
         # These represent the values masked out because there are no radar
