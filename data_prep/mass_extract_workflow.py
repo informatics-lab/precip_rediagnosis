@@ -65,7 +65,7 @@ def make_dest_root(context):
     workflow_path = context.resources.setup["workflow_path"]
     full_path = os.path.join(dest_root, workflow_path)
     try:
-        os.mkdir(full_path, mode=0o755)
+        os.makedirs(full_path, mode=0o755)
     except FileExistsError:
         get_dagster_logger().info(f"Directory {full_path!r} already exists; nothing to do.")
     else:
@@ -167,11 +167,12 @@ def filter_mass_retrieval(context, temp_dir, _) -> list:
 
     unzip_cmd_template = context.op_config["unzip_cmd"]
     dest_root = context.resources.setup["retrieve_path_root"]
-    unzip_cmds = [temp_dir, unzip_temp_dir]
+    workflow_path = context.resources.setup["workflow_path"]
+    unzip_cmds = []
     for zip_file in gunzip_files:
         # XXX this won't work if our files have a file extension..?
         filename = os.path.splitext(os.path.basename(zip_file))[0]
-        dest_path = os.path.join(dest_root, unzip_temp_dir.name, filename)
+        dest_path = os.path.join(dest_root, workflow_path, filename)
         unzip_cmd = unzip_cmd_template.format(
             zip_file=zip_file,
             dest_path=dest_path
@@ -222,7 +223,7 @@ def create_temp_dir(context, linker=None):
 #         get_dagster_logger().info("No temporary directories found; nothing to clean up.")
 
 
-@op(required_resource_keys={"setup"})
+@op(required_resource_keys={"setup"}, ins={"start": In(Nothing)})
 def remove_workflow_dir():
     """Remove the temporary directory used during workflow execution."""
     retrieve_root = context.resources.setup["retrieve_path_root"]
@@ -251,11 +252,11 @@ def mass_retrieve_and_extract(mass_fname):
     ins={"start": In(Nothing)},
     required_resource_keys={"setup"}
 )
-def dates_and_products(context, dates, unzip_tempdir):
+def dates_and_products(context, dates):
     sep = context.resources.setup["sep"]
     date_strs = [f"{dt.year:04d}{dt.month:02d}{dt.day:02d}" for dt in dates]
     products = context.op_config["products"]
-    results = [f"{dt}{sep}{p}{sep}{unzip_tempdir.name}" for dt, p in itertools.product(date_strs, products)]
+    results = [f"{dt}{sep}{p}" for dt, p in itertools.product(date_strs, products)]
     get_dagster_logger().info(f"Dates and products: {results}")
     return results
 
@@ -264,7 +265,7 @@ def dates_and_products(context, dates, unzip_tempdir):
 def save_radar_day_cube(context, bits):
     """Load all NIMROD files for a day of data and save as a single NetCDF file."""
     sep = context.resources.setup["sep"]
-    date_str, product, unzip_tempdir = bits.split(sep)
+    date_str, product = bits.split(sep)
     variable_fname_template = context.op_config["variable_fname_template"]
     variable_fname = variable_fname_template.format(
         timestamp=f"{date_str}*",
@@ -274,7 +275,8 @@ def save_radar_day_cube(context, bits):
     )
     get_dagster_logger().info(f"Load filename template: {variable_fname}")
     filepath = context.resources.setup["retrieve_path_root"]
-    data_load_filepath = os.path.join(filepath, unzip_tempdir, variable_fname)
+    workflow_path = context.resources.setup["workflow_path"]
+    data_load_filepath = os.path.join(filepath, workflow_path, variable_fname)
     get_dagster_logger().info(f"Filepath: {data_load_filepath}")
     load_files = glob.glob(data_load_filepath)
     get_dagster_logger().info(f"Files to load: {load_files}")
@@ -308,6 +310,18 @@ def gather(cmds):
     get_dagster_logger().info(f"Temporary dirs: {tempdirs}")
     get_dagster_logger().info(f"Unzip commands ({len(all_unzip_cmds)}): {all_unzip_cmds}")
     return (list(set(tempdirs)), all_unzip_cmds)  # Make set of tempdirs to ensure only unique values.
+
+
+@op
+def simple_gather(cmds):
+    """
+    Gather lists of collected results from dynamic graph execution.
+    Also sort the results, as the results list has been overloaded to
+    contain the temporary directory name as the 0th item in the list.
+
+    """
+    get_dagster_logger().info(f"Gather received ({len(cmds)}, {len(cmds[0])}): {cmds}")
+    return itertools.chain.from_iterable(cmds)
 
 
 @op(out=DynamicOut())
@@ -351,8 +365,9 @@ def mass_extract():
 
     # Run the extract - once per archive file to extract.
     ### graph_output = paths.map(lambda p: mass_retrieve_and_extract(p, unzip_temp_dir))
-    graph_output = paths.map(mass_retrieve_and_extract)
-    tempdirs_list, unzip_cmds_list = gather(graph_output.collect())
+    graph_response = paths.map(mass_retrieve_and_extract)
+    unzip_cmds_list = simple_gather(graph_response.collect())
+    ## tempdirs_list, unzip_cmds_list = gather(graph_output.collect())
 
     # Unzip files of interest.
     unzip_cmds = dynamicise(unzip_cmds_list)
@@ -362,12 +377,13 @@ def mass_extract():
     results = unzip_cmds.map(run_cmd.with_retry_policy(unzip_retry_policy))
 
     # Create daily NetCDF files of radar data.
-    dts_and_products = dates_and_products(dates, unzip_temp_dir, start=logit(results.collect()))
+    dts_and_products = dates_and_products(dates, start=logit(results.collect()))
     ## dts_and_products = dates_and_products(dates, unzip_temp_dir)
     dts_prods = dynamicise(dts_and_products)
     ## saveds = dts_prods.map(lambda itm: save_radar_day_cube(itm, unzip_temp_dir))
     saveds = dts_prods.map(save_radar_day_cube)
 
     # Tidy up.
-    tempdirs = dynamicise(tempdirs_list)
-    tempdirs.map(lambda tmp: remove_temp_dir(tmp, start=logit(saveds.collect())))
+    ## tempdirs = dynamicise(tempdirs_list)
+    ## tempdirs.map(lambda tmp: remove_temp_dir(tmp, start=logit(saveds.collect())))
+    remove_workflow_dir(start=logit(saveds.collect()))
