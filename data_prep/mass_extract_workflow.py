@@ -74,6 +74,7 @@ def make_dest_root(context):
 
 @op(required_resource_keys={"setup"})
 def run_cmd(context, cmd: str):
+    """Run a shell command."""
     sep = context.resources.setup["sep"]
     get_dagster_logger().info(f"Running shell command: {cmd!r}")
     try:
@@ -88,6 +89,7 @@ def run_cmd(context, cmd: str):
 
 @op
 def dates_to_extract(context):
+    """Generate a list of dates to define files to extract from MASS."""
     datetime_str = context.op_config["datetime_str"]
     delta_hours = context.op_config["archive_time_chunk"]
     event_start = datetime.datetime.strptime(
@@ -118,6 +120,7 @@ def dates_to_extract(context):
 
 @op(required_resource_keys={"setup"}, out=DynamicOut())
 def get_mass_paths(context, dates):
+    """Construct paths to MASS files to extract."""
     mass_root = context.resources.setup["mass_root"]
     mass_filename_template = context.op_config["mass_filename_template"]
     for i, dt in enumerate(dates):
@@ -126,8 +129,8 @@ def get_mass_paths(context, dates):
 
 
 @op(required_resource_keys={"setup"})
-def retrieve_from_mass(context, temp_dir, mass_fname) -> str:
-    """Get a file from MASS."""
+def retrieve_from_mass_command(context, temp_dir, mass_fname) -> str:
+    """Generate a shell command to get a file from MASS."""
     mass_get_cmd_template = context.op_config["mass_get_cmd"]
     mass_get_cmd = mass_get_cmd_template.format(
         args=context.op_config["mass_get_args"],
@@ -138,8 +141,8 @@ def retrieve_from_mass(context, temp_dir, mass_fname) -> str:
 
 
 @op
-def extract_mass_retrieval(context, temp_dir, mass_fname, _) -> str:
-    """Extract a tar archive file retrieved from MASS."""
+def extract_mass_retrieval_command(context, temp_dir, mass_fname, _) -> str:
+    """Generate a shell command to extract a tar archive file retrieved from MASS."""
     untar_cmd_template = context.op_config["untar_cmd"]
     mass_tar_name = os.path.basename(mass_fname)
     extracted_tar_name = os.path.join(temp_dir.name, mass_tar_name)
@@ -151,8 +154,12 @@ def extract_mass_retrieval(context, temp_dir, mass_fname, _) -> str:
 
 
 @op(required_resource_keys={"setup"})
-def filter_mass_retrieval(context, temp_dir, _) -> list:
-    """Filter the extracted archive from MASS for specific files of interest."""
+def filter_mass_retrieval_command(context, temp_dir, _) -> list:
+    """
+    Generate a shell command to filter the extracted archive from MASS for
+    specific files of interest.
+
+    """
     filter_products = context.op_config["products"]
     variable_fname_template = context.op_config["variable_fname_template"]
     gunzip_files = []
@@ -200,27 +207,10 @@ def logit(context, responses):
 
 @op(required_resource_keys={"tempdir_resource"})
 def create_temp_dir(context, linker=None):
+    """Create a temporary directory resource."""
     tempdir = context.resources.tempdir_resource
     get_dagster_logger().info(f"Temporary directory created: {tempdir.name!r}")
     return tempdir
-
-
-# @op(ins={"start": In(Nothing)})
-# def remove_temp_dir(tempdir):
-#     get_dagster_logger().info(f"Temporary directory {tempdir.name} removed")
-#     tempdir.rm_tempdir()
-
-
-# @failure_hook(required_resource_keys={"setup"})
-# def on_fail_remove_tempdirs(context: HookContext):
-#     dest_root = context.resources.setup["retrieve_path_root"]
-#     tempdirs = list(os.walk(dest_root))[0][1]
-#     if len(tempdirs):
-#         for tempdir in tempdirs:
-#             shutil.rmtree(os.path.join(dest_root, tempdir))
-#         get_dagster_logger().info(f"Temporary directories removed: {tempdirs}")
-#     else:
-#         get_dagster_logger().info("No temporary directories found; nothing to clean up.")
 
 
 @op(required_resource_keys={"setup"}, ins={"start": In(Nothing)})
@@ -233,6 +223,7 @@ def remove_workflow_dir():
 
 @failure_hook(required_resource_keys={"setup"})
 def on_fail_remove_tempdirs(context: HookContext):
+    """Clean up after the workflow if it fails mid-run."""
     retrieve_root = context.resources.setup["retrieve_path_root"]
     workflow_path = context.resources.setup["workflow_path"]
     shutil.rmtree(os.path.join(retrieve_root, workflow_path))
@@ -240,6 +231,7 @@ def on_fail_remove_tempdirs(context: HookContext):
 
 @graph
 def mass_retrieve_and_extract(mass_fname):
+    """Graph of commands to retrieve and extract specific files from MASS."""
     temp_dir = create_temp_dir(mass_fname)
     retrieve_resp = run_cmd(retrieve_from_mass(temp_dir, mass_fname))
     logit(retrieve_resp)
@@ -253,6 +245,11 @@ def mass_retrieve_and_extract(mass_fname):
     required_resource_keys={"setup"}
 )
 def dates_and_products(context, dates):
+    """
+    Determine the combination of extracted dates and data products to be converted
+    to NetCDF.
+
+    """
     sep = context.resources.setup["sep"]
     date_strs = [f"{dt.year:04d}{dt.month:02d}{dt.day:02d}" for dt in dates]
     products = context.op_config["products"]
@@ -292,34 +289,9 @@ def save_radar_day_cube(context, bits):
     return nc_filepath
 
 
-@op(out={"tempdirs_out": Out(), "cmds_out": Out()})
-def gather(cmds):
-    """
-    Gather lists of collected results from dynamic graph execution.
-    Also sort the results, as the results list has been overloaded to
-    contain the temporary directory name as the 0th item in the list.
-
-    """
-    get_dagster_logger().info(f"Gather received ({len(cmds)}, {len(cmds[0])}): {cmds}")
-    tempdirs = []
-    all_unzip_cmds = []
-    for cmd_list in cmds:
-        tempdir, unzip_tempdir, *unzip_cmds = cmd_list
-        tempdirs.extend([tempdir, unzip_tempdir])
-        all_unzip_cmds.extend(unzip_cmds)
-    get_dagster_logger().info(f"Temporary dirs: {tempdirs}")
-    get_dagster_logger().info(f"Unzip commands ({len(all_unzip_cmds)}): {all_unzip_cmds}")
-    return (list(set(tempdirs)), all_unzip_cmds)  # Make set of tempdirs to ensure only unique values.
-
-
 @op
 def simple_gather(cmds):
-    """
-    Gather lists of collected results from dynamic graph execution.
-    Also sort the results, as the results list has been overloaded to
-    contain the temporary directory name as the 0th item in the list.
-
-    """
+    """Gather lists of collected results from dynamic graph execution."""
     get_dagster_logger().info(f"Gather received ({len(cmds)}, {len(cmds[0])}): {cmds}")
     return itertools.chain.from_iterable(cmds)
 
@@ -329,16 +301,6 @@ def dynamicise(l):
     """Convert an ordinary Python iterable `l` into a dagster dynamic output."""
     for i, l_itm in enumerate(l):
         yield DynamicOutput(l_itm, mapping_key=f"unzip_{i}")
-
-
-
-class Foo:
-    name = "dwurps_o"
-
-
-@op
-def intervene():
-    return Foo()
 
 
 @job(
@@ -360,14 +322,10 @@ def mass_extract():
     make_dest_root()
     dates = dates_to_extract()
     paths = get_mass_paths(dates)
-    ### unzip_temp_dir = create_temp_dir()
-    ### unzip_temp_dir = intervene()
 
     # Run the extract - once per archive file to extract.
-    ### graph_output = paths.map(lambda p: mass_retrieve_and_extract(p, unzip_temp_dir))
     graph_response = paths.map(mass_retrieve_and_extract)
     unzip_cmds_list = simple_gather(graph_response.collect())
-    ## tempdirs_list, unzip_cmds_list = gather(graph_output.collect())
 
     # Unzip files of interest.
     unzip_cmds = dynamicise(unzip_cmds_list)
@@ -378,12 +336,8 @@ def mass_extract():
 
     # Create daily NetCDF files of radar data.
     dts_and_products = dates_and_products(dates, start=logit(results.collect()))
-    ## dts_and_products = dates_and_products(dates, unzip_temp_dir)
     dts_prods = dynamicise(dts_and_products)
-    ## saveds = dts_prods.map(lambda itm: save_radar_day_cube(itm, unzip_temp_dir))
     saveds = dts_prods.map(save_radar_day_cube)
 
     # Tidy up.
-    ## tempdirs = dynamicise(tempdirs_list)
-    ## tempdirs.map(lambda tmp: remove_temp_dir(tmp, start=logit(saveds.collect())))
     remove_workflow_dir(start=logit(saveds.collect()))
