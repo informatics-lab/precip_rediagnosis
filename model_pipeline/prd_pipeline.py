@@ -19,7 +19,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_absolute_error, r2_score
 
 # azure specific imports
-import azureml.core
+# import azureml.core
 
 import pickle
 
@@ -168,7 +168,7 @@ def preprocess_data(input_data, feature_dict, test_fraction=0.2, test_savefn=Non
 
     # drop NaN values in the dataset
     data = input_data.dropna()
-
+    # data = data[data['realization']==0]
     
     if len(feature_dict['target']) > 1:
         # If feature_dict['target'] is length greater than 1, then the target 
@@ -176,13 +176,14 @@ def preprocess_data(input_data, feature_dict, test_fraction=0.2, test_savefn=Non
         # smallest intensity band has a fraction of 1 
         # i.e. all radar cells in the model cell are in the lowest intensity band
         data = data[data[feature_dict['target'][0]]!=1]
+        # pass
     else:
         # If feature_dict['target'] is length 1, then either mean or max precip is the target and so 
         # we drop data points with zero precip in the radar data
         data = data[data[feature_dict['target']]>0]
 
     # Get a list of columns names for profile features
-    prof_feature_columns = [s for s in data.columns for vars in feature_dict['profile'] if s.startswith(vars)]
+    prof_feature_columns = [s for s in data.columns for vars in feature_dict['profile'] if s.startswith(vars) and s.endswith('.0')]
 
     print(feature_dict)
     data_dims_dict = {
