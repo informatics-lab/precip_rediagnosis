@@ -7,7 +7,7 @@ import subprocess
 from tempfile import mkdtemp
 
 from dagster import (
-    In, Nothing, Out,
+    In, Nothing,
     get_dagster_logger,
     graph, job, op, resource,
     make_values_resource,
@@ -160,7 +160,7 @@ def filter_mass_retrieval_command(context, temp_dir, _) -> list:
     specific files of interest.
 
     """
-    filter_products = context.op_config["products"]
+    filter_products = context.resources.setup["products"]
     variable_fname_template = context.op_config["variable_fname_template"]
     gunzip_files = []
     for product in filter_products:
@@ -214,7 +214,7 @@ def create_temp_dir(context, linker=None):
 
 
 @op(required_resource_keys={"setup"}, ins={"start": In(Nothing)})
-def remove_workflow_dir():
+def remove_workflow_dir(context):
     """Remove the temporary directory used during workflow execution."""
     retrieve_root = context.resources.setup["retrieve_path_root"]
     workflow_path = context.resources.setup["workflow_path"]
@@ -233,10 +233,10 @@ def on_fail_remove_tempdirs(context: HookContext):
 def mass_retrieve_and_extract(mass_fname):
     """Graph of commands to retrieve and extract specific files from MASS."""
     temp_dir = create_temp_dir(mass_fname)
-    retrieve_resp = run_cmd(retrieve_from_mass(temp_dir, mass_fname))
+    retrieve_resp = run_cmd(retrieve_from_mass_command(temp_dir, mass_fname))
     logit(retrieve_resp)
-    extract_resp = run_cmd(extract_mass_retrieval(temp_dir, mass_fname, retrieve_resp))
-    unzip_cmds_list = filter_mass_retrieval(temp_dir, extract_resp)
+    extract_resp = run_cmd(extract_mass_retrieval_command(temp_dir, mass_fname, retrieve_resp))
+    unzip_cmds_list = filter_mass_retrieval_command(temp_dir, extract_resp)
     return unzip_cmds_list
 
 
@@ -251,8 +251,8 @@ def dates_and_products(context, dates):
 
     """
     sep = context.resources.setup["sep"]
+    products = context.resources.setup["products"]
     date_strs = [f"{dt.year:04d}{dt.month:02d}{dt.day:02d}" for dt in dates]
-    products = context.op_config["products"]
     results = [f"{dt}{sep}{p}" for dt, p in itertools.product(date_strs, products)]
     get_dagster_logger().info(f"Dates and products: {results}")
     return results
@@ -270,13 +270,10 @@ def save_radar_day_cube(context, bits):
         resolution="1km",
         area="UK"
     )
-    get_dagster_logger().info(f"Load filename template: {variable_fname}")
     filepath = context.resources.setup["retrieve_path_root"]
     workflow_path = context.resources.setup["workflow_path"]
     data_load_filepath = os.path.join(filepath, workflow_path, variable_fname)
-    get_dagster_logger().info(f"Filepath: {data_load_filepath}")
     load_files = glob.glob(data_load_filepath)
-    get_dagster_logger().info(f"Files to load: {load_files}")
     cubelist = iris.load_raw(load_files)
     iris.util.equalise_attributes(cubelist)
     cube = cubelist.merge_cube()
@@ -313,6 +310,7 @@ def dynamicise(l):
             sep=str,
             logdir=str,
             logfile=str,
+            products=list,
         ),
         "tempdir_resource": tempdir_resource,
     }

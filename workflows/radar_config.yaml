@@ -7,6 +7,9 @@ resources:
       sep: " :: "
       logdir: "."
       logfile: retrieved.log
+      products:
+        - nimrod_ng_radar_rainrate_composite
+        - nimrod_ng_radar_qualityproduct_composite
 ops:
   dates_to_extract:
     config:
@@ -17,11 +20,6 @@ ops:
   get_mass_paths:
     config:
       mass_filename_template: "{dt.year:04d}{dt.month:02d}{dt.day:02d}.tar"
-  dates_and_products:
-    config:
-      products:
-        - nimrod_ng_radar_rainrate_composite
-        - nimrod_ng_radar_qualityproduct_composite
   save_radar_day_cube:
     config:
       variable_fname_template: "{timestamp}_{product}_{resolution}_{area}"
@@ -30,19 +28,16 @@ ops:
       variable_fname_area: UK
   mass_retrieve_and_extract:
     ops:
-      retrieve_from_mass:
+      retrieve_from_mass_command:
         config:
           mass_get_cmd: moo get {args} {src_paths} {dest_path}
           mass_get_args: -f
-      extract_mass_retrieval:
+      extract_mass_retrieval_command:
         config:
           untar_cmd: tar -xf {path} --directory {dest_root}
-      filter_mass_retrieval:
+      filter_mass_retrieval_command:
         config:
           unzip_cmd: gunzip -c {zip_file} > {dest_path}
-          products:
-            - nimrod_ng_radar_rainrate_composite
-            - nimrod_ng_radar_qualityproduct_composite
           variable_fname_timestamp: "*"
           variable_fname_template: "{timestamp}_{product}_{resolution}_{area}.gz"
           variable_fname_resolution: 1km
