@@ -116,7 +116,7 @@ def plot_avg_diff(df, radar_var, nwp_var, time_index):
     
     # reduced realization dimension by taking the mean and time by selecting an index
     radar_data = data_xr[radar_var].mean(dim='realization').isel(forecast_reference_time=time_index)
-    if radar_var == 'max_rain':
+    if 'max_rain' in radar_var :
         nwp_data = data_xr[nwp_var].max(dim='realization').isel(forecast_reference_time=time_index)
     else:
         nwp_data = data_xr[nwp_var].mean(dim='realization').isel(forecast_reference_time=time_index)
@@ -146,7 +146,7 @@ def plot_avg_diff(df, radar_var, nwp_var, time_index):
     plt.show()
 
 
-def radar_fraction_bins_plot(df, target_var, examples, bins_dict):
+def radar_fraction_bins_plot(df, target_var, examples, bins_dict, precip_type):
     assert len(examples)>=2, 'AssertionError please provide 2 or more example indices'
     data_target = df[target_var]
         
@@ -178,13 +178,13 @@ def radar_fraction_bins_plot(df, target_var, examples, bins_dict):
              f"location: ({df.loc[example]['latitude']}, {df.loc[example]['longitude']})"))
 
         # plot a line of max and mean for radar
-        mean_rain = df.loc[example]['mean_rain']
+        mean_rain = df.loc[example][f'radar_mean_rain_{precip_type}']
         ax[i].axvline(
             colnames[np.where(limits <= mean_rain)[0][-1]], 
             alpha=0.7, c='cyan', lw=2,
             label=f'mean radar precip ({mean_rain:.2f}mm)')
 
-        max_rain = df.loc[example]['max_rain']
+        max_rain = df.loc[example][f'radar_max_rain_{precip_type}']
         ax[i].axvline(
             colnames[np.where(limits <= max_rain)[0][-1]],
             c='green', lw=2,
