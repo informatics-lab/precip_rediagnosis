@@ -241,18 +241,26 @@ class ModelStageExtractor(MassExtractor):
             'latitude': (min(target_grid_cube.coord('latitude').points), max(target_grid_cube.coord('latitude').points)),
             'longitude': (min(target_grid_cube.coord('longitude').points), max(target_grid_cube.coord('longitude').points))}
         xarray_select_uk = {k1: slice(*v1) for k1, v1 in uk_bounds.items()}
+        uk_bounds_constraint = iris.Constraint(latitude=lambda c1: uk_bounds['latitude'][0] < c1.point <= uk_bounds['latitude'][1],
+                                      longitude=lambda c1: uk_bounds['longitude'][0] < c1.point <= uk_bounds['longitude'][1])
 
         ts_data_list = []
         for validity_time in self._target_time_range:
             self.logger.info(f'processing model data for time {validity_time}')
-            single_level_ds = xarray.merge([load_ds(
-                ds_path=output_dir / fname_template.format(vt=validity_time,
-                                                                   lead_time=leadtime_hours,
-                                                                   var_name=var1),
-                selected_bounds=xarray_select_uk,
-                )
-                                            for var1 in sl_vars]
-                                           )
+
+            sl_paths = [output_dir / fname_template.format(vt=validity_time,
+                                                         lead_time=leadtime_hours,
+                                                         var_name=var1) for var1 in sl_vars]
+            # read in the data into iris so we can convert the units if required
+            sl_cubes = [iris.load_cube(sl_path, uk_bounds_constraint) for sl_path in sl_paths]
+
+            # fix the units of all rain and snow cubes to match the radar units
+            for cube1 in sl_cubes:
+                if 'rainfall' in cube1.name() or 'snowfall' in cube1.name():
+                    cube1.convert_units('mm/h')
+
+            # then convert into xarray for easier merging and converting into a dataframe
+            single_level_ds = xarray.merge( [xarray.DataArray.from_iris(slc1) for slc1 in sl_cubes] )
             single_level_df = single_level_ds.to_dataframe().reset_index()
 
             height_levels_ds = xarray.merge([load_ds(
@@ -430,10 +438,8 @@ class RadarExtractor(MassExtractor):
             radar_cubes[0].coord('projection_y_coordinate').points.reshape(
                 radar_cubes[0].shape[1], 1), [1, radar_cubes[0].shape[2]])
         proj_x_grid = numpy.tile(
-            radar_cubes[0].coord('projection_x_coordinate').points.reshape(1,
-                                                                       radar_cubes[0].shape[
-                                                                           2]),
-            [radar_cubes[0].shape[1], 1])
+            radar_cubes[0].coord('projection_x_coordinate').points.reshape(
+                1,radar_cubes[0].shape[2]), [radar_cubes[0].shape[1], 1])
 
         ret_val = self._target_grid_cube.coord_system().as_cartopy_crs().transform_points(
             radar_crs,
@@ -560,8 +566,8 @@ class RadarExtractor(MassExtractor):
         # Set up arrays to store regridded radAR precip data
         out_vars_dict = {'radar_fraction_in_band_aggregate_3hr': 'VECTOR',
                          'radar_fraction_in_band_instant': 'VECTOR',
-                         'bands_mask': 'MASK_SCALAR',
-                         'scalar_value_mask': 'MASK_VECTOR',
+                         'bands_mask': 'MASK_VECTOR',
+                         'scalar_value_mask': 'MASK_SCALAR',
                          'radar_max_rain_aggregate_3hr': 'SCALAR',
                          'radar_mean_rain_aggregate_3hr': 'SCALAR',
                          'radar_max_rain_instant': 'SCALAR',
@@ -616,7 +622,7 @@ class RadarExtractor(MassExtractor):
 
         # iterate through each time, rain amount band, latitude and longitude
         for i_time, validity_time in enumerate(validity_times):
-            self.logger.debug(validity_time)
+            self.logger.info(f'Processing radar data for validity time {validity_time}')
             radar_select_time = radar_agg_3hr.extract(iris.Constraint(
                 time=lambda c1: compare_time(c1.bound[0], validity_time)))
             masked_radar = numpy.ma.MaskedArray(

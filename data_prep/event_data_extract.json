@@ -14,50 +14,7 @@
   "merge_vars": [ "latitude", "longitude", "time"],
   "merged_outpout_prefix": "prd_merged",
   "data_sources": [
-    {
-      "data_type": "model_ensemble",
-      "data_extractor": "ModelStageExtractor",
-      "height_level_variables": [
-        "cloud_amount_on_height_levels",
-        "pressure_on_height_levels",
-        "temperature_on_height_levels",
-        "wind_direction_on_height_levels",
-        "wind_speed_on_height_levels"
-      ],
-      "single_level_variables": [
-        "cloud_amount_of_total_cloud",
-        "relative_humidity_on_height_levels",
-        "rainfall_accumulation-PT03H",
-        "snowfall_accumulation-PT03H",
-        "rainfall_rate",
-        "snowfall_rate",
-        "height_of_orography",
-        "pressure_at_mean_sea_level",
-        "rainfall_rate",
-        "rainfall_rate_from_convection",
-        "rainfall_accumulation-PT03H",
-        "rainfall_accumulation_from_convection-PT03H",
-        "snowfall_rate",
-        "snowfall_rate_from_convection",
-        "snowfall_accumulation-PT03H",
-        "snowfall_accumulation_from_convection-PT03H",
-        "rainfall_rate_max-PT03H",
-        "rainfall_rate_from_convection_max-PT03H",
-        "snowfall_rate_max-PT03H",
-        "snowfall_rate_from_convection_max-PT03H"
-      ],
-      "source_root": "moose:/opfc/atm",
-      "dataset": "mogreps-g",
-      "subset": "lev1",
-      "leadtime": 6,
-      "time_delta": 6,
-      "leadtime_template": "{lt:03d}H",
-      "number_of_realisations": 35,
-     "forecast_ref_template": "{frt.year:04d}{frt.month:02d}{frt.day:02d}T{frt.hour:02d}00Z.nc.file",
-      "fname_template": "{vt.year:04d}{vt.month:02d}{vt.day:02d}T{vt.hour:02d}00Z-PT{lead_time:04d}H00M-{var_name}.nc",
-      "model_fname_prefix": "prd_mogreps_g"
-    },
-    {
+{
       "data_type": "radar",
       "dataset": "radar",
       "data_extractor": "RadarExtractor",
@@ -99,6 +56,49 @@
         "150.0": [110.0, 165.0],
         "200.0": [165.0, 220.0]
       }
+    },
+    {
+      "data_type": "model_ensemble",
+      "data_extractor": "ModelStageExtractor",
+      "height_level_variables": [
+        "cloud_amount_on_height_levels",
+        "relative_humidity_on_height_levels",
+        "pressure_on_height_levels",
+        "temperature_on_height_levels",
+        "wind_direction_on_height_levels",
+        "wind_speed_on_height_levels"
+      ],
+      "single_level_variables": [
+        "cloud_amount_of_total_cloud",
+        "rainfall_accumulation-PT03H",
+        "snowfall_accumulation-PT03H",
+        "rainfall_rate",
+        "snowfall_rate",
+        "height_of_orography",
+        "pressure_at_mean_sea_level",
+        "rainfall_rate",
+        "rainfall_rate_from_convection",
+        "rainfall_accumulation-PT03H",
+        "rainfall_accumulation_from_convection-PT03H",
+        "snowfall_rate",
+        "snowfall_rate_from_convection",
+        "snowfall_accumulation-PT03H",
+        "snowfall_accumulation_from_convection-PT03H",
+        "rainfall_rate_max-PT03H",
+        "rainfall_rate_from_convection_max-PT03H",
+        "snowfall_rate_max-PT03H",
+        "snowfall_rate_from_convection_max-PT03H"
+      ],
+      "source_root": "moose:/opfc/atm",
+      "dataset": "mogreps-g",
+      "subset": "lev1",
+      "leadtime": 6,
+      "time_delta": 6,
+      "leadtime_template": "{lt:03d}H",
+      "number_of_realisations": 35,
+     "forecast_ref_template": "{frt.year:04d}{frt.month:02d}{frt.day:02d}T{frt.hour:02d}00Z.nc.file",
+      "fname_template": "{vt.year:04d}{vt.month:02d}{vt.day:02d}T{vt.hour:02d}00Z-PT{lead_time:04d}H00M-{var_name}.nc",
+      "model_fname_prefix": "prd_mogreps_g"
     }
   ]
 }
