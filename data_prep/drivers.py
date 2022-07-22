@@ -243,7 +243,6 @@ class ModelStageExtractor(MassExtractor):
         xarray_select_uk = {k1: slice(*v1) for k1, v1 in uk_bounds.items()}
 
         ts_data_list = []
-        # gridded_data_list = []
         for validity_time in self._target_time_range:
             self.logger.info(f'processing model data for time {validity_time}')
             single_level_ds = xarray.merge([load_ds(
@@ -266,11 +265,8 @@ class ModelStageExtractor(MassExtractor):
             hl_df_multirow = height_levels_ds.to_dataframe().reset_index()
 
             var_df_merged = []
-            # heights_vars_marged = height_levels_df[height_levels_df.height==heights[0]][ merge_coords]
             for var1 in height_level_var_mappings.values():
                 self.logger.debug(f'var1')
-                # for h1 in heights:
-                #     heights_vars_marged[f'{var1}_{h1:.1f}'] = list(height_levels_df[height_levels_df.height==h1][var1])
                 var_at_heights = [hl_df_multirow[hl_df_multirow.height == h1][
                                       merge_coords + [var1]].rename(
                     {var1: f'{var1}_{h1:.1f}'}, axis='columns') for h1 in heights]
@@ -292,7 +288,6 @@ class ModelStageExtractor(MassExtractor):
                     'prd_mg_ts_' + f'{validity_time.year:04d}{validity_time.month:02d}{validity_time.day:02d}{validity_time.hour:02d}{validity_time.minute:02d}'
                     + self._fname_extension_grid)
                                   )
-            # gridded_data_list += [xarray.merge([height_levels_ds, single_level_ds])]
 
         prd_column_dataset = pandas.concat(ts_data_list)
 
@@ -420,8 +415,91 @@ class RadarExtractor(MassExtractor):
                 delete_file_list(radar_day_pathlist)
         self.logger.info(f'files output to {dest_root}')
 
+    def _calc_lat_lon_coords(self, radar_cubes):
+        """
+
+        :param radar_cubes:
+        :return:
+        """
+        self.logger.debug('Calculating index mapping for target grid')
+
+        radar_crs = radar_cubes[0].coord_system().as_cartopy_crs()
+
+        # Create some helper arrays for converting from our radar grid to the mogreps-g grid
+        proj_y_grid = numpy.tile(
+            radar_cubes[0].coord('projection_y_coordinate').points.reshape(
+                radar_cubes[0].shape[1], 1), [1, radar_cubes[0].shape[2]])
+        proj_x_grid = numpy.tile(
+            radar_cubes[0].coord('projection_x_coordinate').points.reshape(1,
+                                                                       radar_cubes[0].shape[
+                                                                           2]),
+            [radar_cubes[0].shape[1], 1])
+
+        ret_val = self._target_grid_cube.coord_system().as_cartopy_crs().transform_points(
+            radar_crs,
+            proj_y_grid,
+            proj_x_grid,
+        )
+
+        lat_vals = ret_val[:, :, 1]
+        lon_vals = ret_val[:, :, 0]
+
+        lon_coord = iris.coords.AuxCoord(
+            lon_vals,
+            standard_name='longitude',
+            units='degrees',
+        )
+        lat_coord = iris.coords.AuxCoord(
+            lat_vals,
+            standard_name='latitude',
+            units='degrees',
+        )
+
+        for rc1 in radar_cubes:
+            rc1.add_aux_coord(lon_coord, [1, 2])
+            rc1.add_aux_coord(lat_coord, [1, 2])
+
+        return lat_vals, lon_vals
+
+    def _calc_target_cube_indices(self, lat_vals, lon_vals, radar_cube):
+        """
+        Calculate the latitude and longitude index in the target cube
+        coordinate system of each grid square in the radar cube.
+        :param lat_vals: A 1D array of the target latitude values
+        :param lon_vals: A 1D array of the target longitude values
+        :param radar_cube: The source radar cube for the calculating the mapping
+        :return: 2D numpy arrays with a mapping for each cell in the radar
+        cube to the index in latitude and longitude of the target cube.
+        """
+        lat_target_index = -1 * numpy.ones(
+            (radar_cube.shape[1], radar_cube.shape[2]),
+            dtype='int32',
+        )
+        lon_target_index = -1 * numpy.ones(
+            (radar_cube.shape[1], radar_cube.shape[2]),
+            dtype='int32',
+        )
+
+        num_cells= numpy.zeros((self._target_grid_cube.shape[0],
+                                  self._target_grid_cube.shape[1], ))
+        for i_lon, bnd_lon in enumerate(
+                self._target_grid_cube.coord('longitude').bounds):
+
+            for i_lat, bnd_lat in enumerate(
+                    self._target_grid_cube.coord('latitude').bounds):
+                arr1, arr2 = numpy.where((lat_vals >= bnd_lat[0]) &
+                                         (lat_vals < bnd_lat[1]) &
+                                         (lon_vals >= bnd_lon[0]) &
+                                         (lon_vals < bnd_lon[1])
+                                         )
+                lon_target_index[arr1, arr2] = i_lon
+                lat_target_index[arr1, arr2] = i_lat
+                num_cells[i_lat, i_lon] = len(arr1)
+
+        return lat_target_index, lon_target_index, num_cells
+
+
     def prepare(self):
-        self.logger.debug('Output level debug')
         radar_days = self.dates_to_extract
         radar_fname_template = self._opts['intermediate_fname_template']
         product1 = 'composite_rainfall'
@@ -441,7 +519,7 @@ class RadarExtractor(MassExtractor):
         iris.coord_categorisation.add_day_of_year(radar_cube, coord='time')
 
         # load a simple cube representing the target grid
-        target_grid_cube = iris.load_cube(
+        self._target_grid_cube = iris.load_cube(
             str(self._target_cube_path)
         )
 
@@ -465,118 +543,77 @@ class RadarExtractor(MassExtractor):
         # we can then sum to get to our desired accumulation
         radar_agg_3hr.data = radar_agg_3hr.data * (1.0 / 12.0)
 
-        radar_crs = radar_cube.coord_system().as_cartopy_crs()
+        lat_vals, lon_vals = self._calc_lat_lon_coords([radar_cube,
+                                                        radar_agg_3hr])
 
-        #TODO: bundle the creation of the auxillary lat lon coordinates into a separate function
-
-        self.logger.debug('Calculating index mapping for target grid')
-
-        # Create some helper arrays for converting from our radar grid to the mogreps-g grid
-        proj_y_grid = numpy.tile(radar_cube.coord('projection_y_coordinate').points.reshape(radar_cube.shape[1],1), [1, radar_cube.shape[2]])
-        proj_x_grid = numpy.tile(radar_cube.coord('projection_x_coordinate').points.reshape(1,radar_cube.shape[2]), [ radar_cube.shape[1],1])
-
-        ret_val = target_grid_cube.coord_system().as_cartopy_crs().transform_points(
-            radar_crs,
-            proj_y_grid,
-            proj_x_grid,
-            )
-
-        lat_vals = ret_val[:,:,1]
-        lon_vals = ret_val[:,:,0]
-
-        lon_coord = iris.coords.AuxCoord(
-            lon_vals,
-            standard_name='longitude',
-            units='degrees',
-        )
-        lat_coord = iris.coords.AuxCoord(
-            lat_vals,
-            standard_name='latitude',
-            units='degrees',
-        )
-
-        radar_cube.add_aux_coord(lon_coord,[1,2])
-        radar_cube.add_aux_coord(lat_coord,[1,2])
-        radar_agg_3hr.add_aux_coord(lon_coord,[1,2])
-        radar_agg_3hr.add_aux_coord(lat_coord,[1,2])
 
         # remove these coordinates as they interfere with subsequent calculations
-        radar_agg_3hr.remove_coord('model_accum_time')
-        radar_agg_3hr.remove_coord('forecast_reference_time')
-        radar_agg_3hr.remove_coord('hour')
-        radar_agg_3hr.remove_coord('day_of_year')
-        radar_agg_3hr.remove_coord('3hr')
+        for coord_name in ['model_accum_time', 'forecast_reference_time', 'hour', 'day_of_year','3hr']:
+            radar_agg_3hr.remove_coord(coord_name)
 
-        # Calculate the latitude and longitude index in the target cube
-        # coordinate system of each grid square in the radar cube.
-        lat_target_index = -1 * numpy.ones(
-            (radar_cube.shape[1], radar_cube.shape[2]),
-            dtype='int32',
+        lat_target_index, lon_target_index, num_cells = self._calc_target_cube_indices(
+            lat_vals=lat_vals,
+            lon_vals=lon_vals,
+            radar_cube=radar_cube
         )
-        lon_target_index = -1 * numpy.ones(
-            (radar_cube.shape[1], radar_cube.shape[2]),
-            dtype='int32',
-        )
-
-        num_cells= numpy.zeros((target_grid_cube.shape[0],
-                                  target_grid_cube.shape[1], ))
-        for i_lon, bnd_lon in enumerate(
-                target_grid_cube.coord('longitude').bounds):
-
-            for i_lat, bnd_lat in enumerate(
-                    target_grid_cube.coord('latitude').bounds):
-                arr1, arr2 = numpy.where((lat_vals >= bnd_lat[0]) &
-                                         (lat_vals < bnd_lat[1]) &
-                                         (lon_vals >= bnd_lon[0]) &
-                                         (lon_vals < bnd_lon[1])
-                                         )
-                lon_target_index[arr1, arr2] = i_lon
-                lat_target_index[arr1, arr2] = i_lat
-                num_cells[i_lat, i_lon] = len(arr1)
 
         # Set up arrays to store regridded radAR precip data
-        bands_agg_data = numpy.zeros(
-            [len(self._target_time_range), target_grid_cube.shape[0],
-             target_grid_cube.shape[1], len(rainfall_thresholds)])
-        bands_instant_data = numpy.zeros(
-            [len(self._target_time_range), target_grid_cube.shape[0],
-             target_grid_cube.shape[1], len(rainfall_thresholds)])
+        out_vars_dict = {'radar_fraction_in_band_aggregate_3hr': 'VECTOR',
+                         'radar_fraction_in_band_instant': 'VECTOR',
+                         'bands_mask': 'MASK_SCALAR',
+                         'scalar_value_mask': 'MASK_VECTOR',
+                         'radar_max_rain_aggregate_3hr': 'SCALAR',
+                         'radar_mean_rain_aggregate_3hr': 'SCALAR',
+                         'radar_max_rain_instant': 'SCALAR',
+                         'radar_mean_rain_instant': 'SCALAR',
+                         'fraction_sum_agg': 'SCALAR',
+                         'fraction_sum_instant': 'SCALAR',
+                         }
 
-        bands_mask = numpy.ones(
-            [len(self._target_time_range), target_grid_cube.shape[0],
-             target_grid_cube.shape[1], len(rainfall_thresholds)],
-            dtype='bool',
-        )
 
-        scalar_value_mask = numpy.ones(
-            [len(self._target_time_range), target_grid_cube.shape[0],
-             target_grid_cube.shape[1]],
-            dtype='bool',
-        )
+        out_vars_long_names = {
+            'radar_fraction_in_band_aggregate_3hr': 'Fraction radar rainfall cells in specified 3hr aggregate rain band ',
+            'radar_fraction_in_band_instant': 'Fraction radar rainfall cells in specified instant rain band',
+            'radar_max_rain_aggregate_3hr': 'maximum rain in radar cells within mogreps-g cell',
+            'radar_mean_rain_aggregate_3hr': 'average rain in radar cells within mogreps-g cell',
+            'radar_max_rain_instant': 'maximum rain in radar cells within mogreps-g cell',
+            'radar_mean_rain_instant': 'average rain in radar cells within mogreps-g cell',
+            'fraction_sum_agg': 'Sum of fractions for each cell for aggregate 3hr data',
+            'fraction_sum_instant': 'Sum of fractions for each cell for instant precip data',
+        }
 
-        max_rain_data = numpy.zeros(
-            [len(self._target_time_range), target_grid_cube.shape[0],
-             target_grid_cube.shape[1]])
-        mean_rain_data = numpy.zeros(
-            [len(self._target_time_range), target_grid_cube.shape[0],
-             target_grid_cube.shape[1]])
+        regridded_arrays_dict = {}
+        for var_name in [k1 for k1,v1 in out_vars_dict.items() if v1 == 'VECTOR']:
+            regridded_arrays_dict[var_name] = numpy.zeros(
+                [len(self._target_time_range),
+                 self._target_grid_cube.shape[0],
+                 self._target_grid_cube.shape[1],
+                 len(rainfall_thresholds)])
 
-        max_rain_data_instant = numpy.zeros(
-            [len(self._target_time_range), target_grid_cube.shape[0],
-             target_grid_cube.shape[1]])
-        mean_rain_data_instant = numpy.zeros(
-            [len(self._target_time_range), target_grid_cube.shape[0],
-             target_grid_cube.shape[1]])
+        for var_name in [k1 for k1,v1 in out_vars_dict.items() if v1 == 'MASK_SCALAR']:
+            regridded_arrays_dict[var_name] = numpy.ones(
+                [len(self._target_time_range), self._target_grid_cube.shape[0],
+                 self._target_grid_cube.shape[1]],
+                dtype='bool',
+            )
 
-        fraction_sum_agg = numpy.zeros(
-            [len(self._target_time_range), target_grid_cube.shape[0],
-             target_grid_cube.shape[1]])
-        fraction_sum_instant = numpy.zeros(
-            [len(self._target_time_range), target_grid_cube.shape[0],
-             target_grid_cube.shape[1]])
+        for var_name in [k1 for k1,v1 in out_vars_dict.items() if v1 == 'MASK_VECTOR']:
+            regridded_arrays_dict[var_name] = numpy.ones(
+                [len(self._target_time_range),
+                 self._target_grid_cube.shape[0],
+                 self._target_grid_cube.shape[1],
+                 len(rainfall_thresholds)]
+            )
 
+        for var_name in [k1 for k1,v1 in out_vars_dict.items() if v1 == 'SCALAR']:
+            regridded_arrays_dict[var_name] = numpy.zeros(
+                [len(self._target_time_range),
+                 self._target_grid_cube.shape[0],
+                 self._target_grid_cube.shape[1]]
+            )
 
         self.logger.debug('doing regridding operation from radar to target grid')
+
         # iterate through each time, rain amount band, latitude and longitude
         for i_time, validity_time in enumerate(validity_times):
             self.logger.debug(validity_time)
@@ -591,8 +628,8 @@ class RadarExtractor(MassExtractor):
             masked_radar_instant = numpy.ma.MaskedArray(
                 radar_instant_select_time.data.data,
                 radar_cube[0].data.mask)
-            for i_lat in range(target_grid_cube.shape[0]):
-                for i_lon in range(target_grid_cube.shape[1]):
+            for i_lat in range(self._target_grid_cube.shape[0]):
+                for i_lon in range(self._target_grid_cube.shape[1]):
                     selected_cells = (~(radar_select_time.data.mask)) & \
                                      (lat_target_index == i_lat) & (
                                                  lon_target_index == i_lon)
@@ -612,51 +649,50 @@ class RadarExtractor(MassExtractor):
                     if radar_cells_in_mg > 0:
                         # set the values for this location to be unmasker,
                         # as we have valid radar values for this location
-                        bands_mask[i_time, i_lat, i_lon, :] = False
-                        scalar_value_mask[i_time, i_lat, i_lon] = False
+                        regridded_arrays_dict['bands_mask'][i_time, i_lat, i_lon, :] = False
+                        regridded_arrays_dict['scalar_value_mask'][i_time, i_lat, i_lon] = False
                         for imp_ix, (imp_key, imp_bounds) in enumerate(
                                 rainfall_thresholds.items()):
                             # calculate fraction in band for 3 horaggregate data
                             num_in_band_agg = numpy.count_nonzero(
                                 (masked_radar.compressed() >= imp_bounds[0]) &
                                 (masked_radar.compressed() <= imp_bounds[1]) )
-                            bands_agg_data[
+                            regridded_arrays_dict['radar_fraction_in_band_aggregate_3hr'][
                                 i_time, i_lat, i_lon, imp_ix] = num_in_band_agg / (len(masked_radar.compressed()))
 
                             # calculate raction in band for instant radar data
                             num_in_band_instant = numpy.count_nonzero(
                                 (masked_radar_instant.compressed() >= imp_bounds[0]) &
                                 (masked_radar_instant.compressed() <= imp_bounds[1]) )
-                            bands_instant_data[i_time, i_lat, i_lon, imp_ix] = num_in_band_instant / (len(masked_radar_instant.compressed()))
-                        # self.logger.debug(bands_agg_data[i_time, i_lat, i_lon, :])
-                        # self.logger.debug(bands_instant_data[i_time, i_lat, i_lon, :])
-                        fraction_sum_agg[i_time, i_lat, i_lon] = bands_agg_data[i_time, i_lat, i_lon, :].sum()
-                        self.logger.debug(f'sum of fractions agg {fraction_sum_agg[i_time, i_lat, i_lon] }')
-                        fraction_sum_instant[i_time, i_lat, i_lon] = bands_instant_data[i_time, i_lat, i_lon, :].sum()
-                        self.logger.debug(f'sum of fractions instant {fraction_sum_instant[i_time, i_lat, i_lon] }')
+                            regridded_arrays_dict['radar_fraction_in_band_instant'][i_time, i_lat, i_lon, imp_ix] = num_in_band_instant / (len(masked_radar_instant.compressed()))
+                        regridded_arrays_dict['fraction_sum_agg'][i_time, i_lat, i_lon] = regridded_arrays_dict['radar_fraction_in_band_aggregate_3hr'][i_time, i_lat, i_lon, :].sum()
+                        self.logger.debug(f'sum of fractions agg {regridded_arrays_dict["fraction_sum_agg"][i_time, i_lat, i_lon] }')
+                        regridded_arrays_dict['fraction_sum_instant'][i_time, i_lat, i_lon] = regridded_arrays_dict['radar_fraction_in_band_instant'][i_time, i_lat, i_lon, :].sum()
+                        self.logger.debug(f'sum of fractions instant {regridded_arrays_dict["fraction_sum_instant"][i_time, i_lat, i_lon] }')
 
                         # calculate the max and average of all radar cells within each mogreps-g cell
-                        max_rain_data[i_time, i_lat, i_lon] = masked_radar.max()
-                        mean_rain_data[i_time, i_lat, i_lon] = (masked_radar.sum()) / radar_cells_in_mg
-                        self.logger.debug(f'{mean_rain_data[i_time, i_lat, i_lon]} , {max_rain_data[i_time, i_lat, i_lon]},' )
+                        regridded_arrays_dict['radar_max_rain_aggregate_3hr'][i_time, i_lat, i_lon] = masked_radar.max()
+                        regridded_arrays_dict['radar_mean_rain_aggregate_3hr'][i_time, i_lat, i_lon] = (masked_radar.sum()) / radar_cells_in_mg
+                        self.logger.debug(f'{regridded_arrays_dict["radar_mean_rain_aggregate_3hr"][i_time, i_lat, i_lon]} , {regridded_arrays_dict["radar_max_rain_aggregate_3hr"][i_time, i_lat, i_lon]},' )
 
                         # create instant radar rate feature data
-                        max_rain_data_instant[i_time, i_lat, i_lon] = masked_radar_instant.max()
-                        mean_rain_data_instant[i_time, i_lat, i_lon] = (masked_radar_instant.sum()) / radar_cells_in_mg
-                        self.logger.debug(f'{mean_rain_data_instant[i_time, i_lat, i_lon]} , {max_rain_data_instant[i_time, i_lat, i_lon]},')
+                        regridded_arrays_dict['radar_max_rain_instant'][i_time, i_lat, i_lon] = masked_radar_instant.max()
+                        regridded_arrays_dict['radar_mean_rain_instant'][i_time, i_lat, i_lon] = (masked_radar_instant.sum()) / radar_cells_in_mg
+                        self.logger.debug(f'{regridded_arrays_dict["radar_mean_rain_instant"][i_time, i_lat, i_lon]} , {regridded_arrays_dict["radar_max_rain_instant"][i_time, i_lat, i_lon]},')
                     else:
                         self.logger.debug(f'no radar cells to include at ({i_lat},{i_lon})')
 
 
-        total_num_pts = fraction_sum_instant.shape[0] * fraction_sum_instant.shape[1] * fraction_sum_instant.shape[2]
-        self.logger.info(f' sum of fraction aggregate, number equal to 1, {(fraction_sum_agg > 0.999 ).sum()} of {total_num_pts}')
+        total_num_pts = (regridded_arrays_dict['fraction_sum_instant'].shape[0] *
+                         regridded_arrays_dict['fraction_sum_instant'].shape[1] *
+                         regridded_arrays_dict['fraction_sum_instant'].shape[2])
+        self.logger.info(f' sum of fraction aggregate, number equal to 1, {(regridded_arrays_dict["fraction_sum_agg"] > 0.999 ).sum()} of {total_num_pts}')
 
-        self.logger.info(f' sum of fraction instant, number equal to 1, {(fraction_sum_instant > 0.999).sum()} of {total_num_pts}')
+        self.logger.info(f' sum of fraction instant, number equal to 1, {(regridded_arrays_dict["fraction_sum_instant"] > 0.999).sum()} of {total_num_pts}')
 
 
-        target_lat_coord = target_grid_cube.coord('latitude')
-        target_lon_coord = target_grid_cube.coord('longitude')
-
+        target_lat_coord = self._target_grid_cube.coord('latitude')
+        target_lon_coord = self._target_grid_cube.coord('longitude')
         band_coord = iris.coords.DimCoord(
             [float(b1) for b1 in rainfall_thresholds.keys()],
             bounds=list(rainfall_thresholds.values()),
@@ -669,32 +705,23 @@ class RadarExtractor(MassExtractor):
             var_name='time',
             units=radar_cube.coord('time').units,
         )
-        var_name_fraction_agg = 'radar_fraction_in_band_aggregate_3hr'
-        fraction_agg_rain_band = iris.cube.Cube(
-            data=numpy.ma.MaskedArray(data=bands_agg_data,
-                                      mask=bands_mask,
-                                      ),
-            dim_coords_and_dims=(
-            (radar_time_coord, 0), (target_lat_coord, 1), (target_lon_coord, 2),
-            (band_coord, 3)),
-            units=None,
-            var_name= var_name_fraction_agg,
-            long_name='Fraction radar rainfall cells in specified 3hr aggregate rain band ',
-        )
 
-        var_name_fraction_instant = 'radar_fraction_in_band_instant'
-        fraction_instant_rain_band = iris.cube.Cube(
-            data=numpy.ma.MaskedArray(data=bands_instant_data,
-                                      mask=bands_mask,
-                                      ),
-            dim_coords_and_dims=(
-            (radar_time_coord, 0), (target_lat_coord, 1), (target_lon_coord, 2),
-            (band_coord, 3)),
-            units=None,
-            var_name=var_name_fraction_instant,
-            long_name='Fraction radar rainfall cells in specified instant rain band',
-        )
+        radar_regrided_cubes = {}
 
+
+        for var_name in [k1 for k1, v1 in out_vars_dict.items() if v1 == 'VECTOR']:
+            radar_regrided_cubes[var_name] = iris.cube.Cube(
+                data=numpy.ma.MaskedArray(data=regridded_arrays_dict[var_name],
+                                          mask=regridded_arrays_dict['bands_mask'],
+                                          ),
+                dim_coords_and_dims=(
+                    (radar_time_coord, 0), (target_lat_coord, 1),
+                    (target_lon_coord, 2),
+                    (band_coord, 3)),
+                units=None,
+                var_name=var_name,
+                long_name=out_vars_long_names[var_name],
+            )
 
         num_cells_cube = iris.cube.Cube(
             data=num_cells,
@@ -703,87 +730,47 @@ class RadarExtractor(MassExtractor):
             var_name='num_radar_cells',
         )
 
+        for var_name in [k1 for k1, v1 in out_vars_dict.items()
+                         if v1 == 'SCALAR']:
+            radar_regrided_cubes[var_name] = iris.cube.Cube(
+                data=numpy.ma.MaskedArray(data=regridded_arrays_dict[var_name],
+                                          mask=regridded_arrays_dict[
+                                              'scalar_value_mask'],
+                                          ),
+                dim_coords_and_dims=(
+                    (radar_time_coord, 0), (target_lat_coord, 1),
+                    (target_lon_coord, 2),),
+                units='mm',
+                var_name=var_name,
+                long_name=out_vars_long_names[var_name],
+            )
 
-        max_rain_cube = iris.cube.Cube(
-            data=numpy.ma.MaskedArray(data=max_rain_data,
-                                      mask=scalar_value_mask,
-                                      ),
-            dim_coords_and_dims=(
-            (radar_time_coord, 0), (target_lat_coord, 1), (target_lon_coord, 2),),
-            units='mm',
-            var_name='radar_max_rain_aggregate_3hr',
-            long_name='maximum rain in radar cells within mogreps-g cell',
-        )
+        cubelist_to_save = iris.cube.CubeList(radar_regrided_cubes.values())
 
-        mean_rain_cube = iris.cube.Cube(
-            data=numpy.ma.MaskedArray(data=mean_rain_data,
-                                      mask=scalar_value_mask,
-                                      ),
-            dim_coords_and_dims=(
-            (radar_time_coord, 0), (target_lat_coord, 1), (target_lon_coord, 2),),
-            units='mm',
-            var_name='radar_mean_rain_aggregate_3hr',
-            long_name='average rain in radar cells within mogreps-g cell',
-        )
-
-        max_rain_instant_cube = iris.cube.Cube(
-            data=numpy.ma.MaskedArray(data=max_rain_data_instant,
-                                      mask=scalar_value_mask,
-                                      ),
-            dim_coords_and_dims=(
-                (radar_time_coord, 0), (target_lat_coord, 1),
-                (target_lon_coord, 2),),
-            units='mm',
-            var_name='radar_max_rain_instant',
-            long_name='maximum rain in radar cells within mogreps-g cell',
-        )
-        var_name_mean_instant = 'radar_mean_rain_instant'
-        mean_rain_instant_cube = iris.cube.Cube(
-            data=numpy.ma.MaskedArray(data=mean_rain_data_instant,
-                                      mask=scalar_value_mask,
-                                      ),
-            dim_coords_and_dims=(
-                (radar_time_coord, 0), (target_lat_coord, 1),
-                (target_lon_coord, 2),),
-            units='mm',
-            var_name=var_name_mean_instant,
-            long_name='average rain in radar cells within mogreps-g cell',
-        )
-
-        cubelist_to_save = iris.cube.CubeList(
-            [fraction_agg_rain_band,
-             fraction_instant_rain_band,
-             max_rain_cube,
-             mean_rain_cube,
-             max_rain_instant_cube,
-             mean_rain_instant_cube,
-             num_cells_cube,
-             ])
-
-        output_dir = self._dest_path
         fname_timestamp = self._date_fname_template.format(
             start=self._date_range[0],
             end=self._date_range[1],
             )
         # Save gridded radar data as a netcdf file
         grid_fname = self._opts['radar_fname_prefix'] + '_' + fname_timestamp + self._fname_extension_grid
-        iris.save(cubelist_to_save, output_dir / grid_fname)
+        iris.save(cubelist_to_save, radar_data_dir / grid_fname)
 
         rain_bands = list(rainfall_thresholds.keys())
 
-        frac_agg_df = xarray.DataArray.from_iris(
-            fraction_agg_rain_band).to_dataframe().reset_index()
-        frac_instant_df = xarray.DataArray.from_iris(
-            fraction_instant_rain_band).to_dataframe().reset_index()
+        vector_var_dataframes = {
+            var_name: xarray.DataArray.from_iris(
+            radar_regrided_cubes[var_name]).to_dataframe().reset_index()
+            for var_name, var_type in out_vars_dict.items() if var_type == 'VECTOR'
+        }
+
 
         # restructure the dataframe, so that fractions in different bands are
         # separate coumns (features), rather than different data points (rows)
-        scalar_cube_list = [mean_rain_cube,
-                            max_rain_cube,
-                            mean_rain_instant_cube,
-                            max_rain_instant_cube]
+        scalar_cube_list = [radar_regrided_cubes[k1] for k1,v1 in out_vars_dict.items() if v1 == 'SCALAR']
 
-        # first merge the min and max fields
+        # first merge the mean and max scalar fields (scalar in the sense that
+        # each grid cells has a scalar value, unlike the rain band fractions
+        # where each grid cell has a vector of outputs.
         radar_df = functools.reduce(
             lambda x, y: pandas.merge(x, y, on=('latitude',
                                                 'longitude',
@@ -792,29 +779,30 @@ class RadarExtractor(MassExtractor):
              for arr1 in scalar_cube_list))
 
         # next merge in the fraction of intensity bands one at a time
-        for band1 in rain_bands:
-            df1 = frac_agg_df[frac_agg_df['band'] == float(band1)][
-                ['time', 'latitude', 'longitude', var_name_fraction_agg]]
-            df1 = df1.rename({var_name_fraction_agg: f'{var_name_fraction_agg}_{band1}'},
-                             axis='columns')
-            radar_df = pandas.merge(radar_df, df1,
-                                    on=['time', 'latitude', 'longitude'])
-            df1 = frac_instant_df[frac_instant_df['band'] == float(band1)][
-                ['time', 'latitude', 'longitude', var_name_fraction_instant]]
-            df1 = df1.rename({var_name_fraction_instant: f'{var_name_fraction_instant}_{band1}'},
-                             axis='columns')
-            radar_df = pandas.merge(radar_df, df1,
-                                    on=['time', 'latitude', 'longitude'])
+
+        for var_name in [k1 for k1,v1 in out_vars_dict.items() if v1 == 'VECTOR']:
+            for band1 in rain_bands:
+                vector_df = vector_var_dataframes[var_name]
+                df1 = vector_df[vector_df['band'] == float(band1)][
+                    ['time', 'latitude', 'longitude', var_name]]
+                df1 = df1.rename({var_name: f'{var_name}_{band1}'},
+                                 axis='columns')
+                radar_df = pandas.merge(radar_df, df1,
+                                        on=['time', 'latitude', 'longitude'])
 
         # find where the fields are NaN, and exclude those from the table.
         # These represent the values masked out because there are no radar
         # cells in the paticular mogreps-g cells.
-        radar_df = radar_df[~(radar_df[var_name_mean_instant].isna())]
+
+        selected_var = [k1 for k1, v1 in out_vars_dict.items() if v1 == 'SCALAR'][0]
+
+        # use any output variable to find where there are NaNs and exclude those data points
+        radar_df = radar_df[~(radar_df[selected_var].isna())]
 
         radar_tab_fname = (self._opts['radar_fname_prefix'] + '_' +
                            fname_timestamp + self._fname_extension_tabular
                            )
-        radar_df.to_csv(output_dir / radar_tab_fname, index=False)
+        radar_df.to_csv(radar_data_dir / radar_tab_fname, index=False)
 
         # Assign the output variable to the correct memeber variable
         # for subsequent merging
