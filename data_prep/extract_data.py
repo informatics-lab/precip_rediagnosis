@@ -67,10 +67,17 @@ def main():
 
     end_dt = datetime.datetime.strptime(dataset_config['event_end'],
                                         DATETIME_PARSER)
+    event_name = dataset_config['event_name']
+    dest_dir = pathlib.Path(cmd_args.output_path) / event_name
+    if not dest_dir.is_dir():
+        dest_dir.mkdir()
+
+    logger1.info(f'processing config for event {event_name}')
+    logger1.info(f'writing output to {dest_dir}')
 
     driver_init_args = {
         'opts': {},
-        'dest': cmd_args.output_path,
+        'dest': str(dest_dir),
         'date_range': [start_dt, end_dt],
         'log_dir': cmd_args.log_dir,
         'target_cube_path': cmd_args.target_cube_path,
@@ -81,6 +88,7 @@ def main():
         'output_level': cmd_args.output_level,
     }
     driver_list = []
+
     for data_source_cfg in dataset_config['data_sources']:
         logger1.info(f'processing data source of type {data_source_cfg["data_type"]}')
         driver_init_args['opts'] = data_source_cfg
