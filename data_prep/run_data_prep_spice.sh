@@ -6,7 +6,7 @@
 #SBATCH --time=240
 
 
-export EVENT_NAME = '2020_storm_ciara.json'
+export EVENT_NAME=2020_storm_dennis.json
 echo Processing event ${EVENT_NAME}
 
 export SRC_PATH=$HOME/prog/precip_rediagnosis/

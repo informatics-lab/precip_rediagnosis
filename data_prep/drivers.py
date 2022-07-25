@@ -250,13 +250,18 @@ class ModelStageExtractor(MassExtractor):
 
             sl_paths = [output_dir / fname_template.format(vt=validity_time,
                                                          lead_time=leadtime_hours,
-                                                         var_name=var1) for var1 in sl_vars]
+                                                           var_name=var1) for var1 in sl_vars]
             # read in the data into iris so we can convert the units if required
-            sl_cubes = [iris.load_cube(sl_path, uk_bounds_constraint) for sl_path in sl_paths]
+            sl_cubes = [iris.load_cube(str(sl_path), uk_bounds_constraint) for sl_path in sl_paths]
 
             # fix the units of all rain and snow cubes to match the radar units
+            # import pdb
+            # pdb.set_trace()
+
             for cube1 in sl_cubes:
-                if 'rainfall' in cube1.name() or 'snowfall' in cube1.name():
+                if 'thickness' in cube1.name() and ('rainfall' in cube1.name() or 'snowfall' in cube1.name()):
+                    cube1.convert_units('mm')
+                if 'rate' in cube1.name() and ('rainfall' in cube1.name() or 'snowfall' in cube1.name()):
                     cube1.convert_units('mm/h')
 
             # then convert into xarray for easier merging and converting into a dataframe

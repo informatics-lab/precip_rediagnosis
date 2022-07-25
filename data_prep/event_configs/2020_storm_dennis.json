@@ -21,7 +21,7 @@
       "source_root": "moose:/adhoc/projects/radar_archive/data/comp/products/composites/",
       "fname_mass_template": "{dt.year:04d}{dt.month:02d}{dt.day:02d}.tar",
       "variable_fname_template": "{timestamp}_{product}_{resolution}_{area}",
-      "intermediate_fname_template": "{product}_{selected_day.year:04d}{selected_day.month:02d}{selected_day.day}.nc",
+      "intermediate_fname_template": "{product}_{selected_day.year:04d}{selected_day.month:02d}{selected_day.day:02d}.nc",
       "archive_time_chunk": 24,
       "products": {
         "composite_rainfall": "nimrod_ng_radar_rainrate_composite",

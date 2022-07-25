@@ -13,30 +13,7 @@
   "merge_vars": [ "latitude", "longitude", "time"],
   "merged_outpout_prefix": "prd_merged",
   "data_sources": [
-{
-          "data_type": "radar",
-          "dataset": "radar",
-          "data_extractor": "RadarExtractor",
-          "source_root": "moose:/adhoc/projects/radar_archive/data/comp/products/composites/",
-          "fname_mass_template": "{dt.year:04d}{dt.month:02d}{dt.day:02d}.tar",
-          "variable_fname_template": "{timestamp}_{product}_{resolution}_{area}",
-          "intermediate_fname_template": "{product}_{selected_day.year:04d}{selected_day.month:02d}{selected_day.day}.nc",
-          "archive_time_chunk": 24,
-          "products": {
-            "composite_rainfall": "nimrod_ng_radar_rainrate_composite",
-            "composite_quality": "nimrod_ng_radar_qualityproduct_composite"
-          },
-          "resolution": "1km",
-          "area": "UK",
-          "radar_fname_prefix": "prd_radar",
-
-          "rainfall_thresholds": {
-            "0.25": [0.0, 0.5],
-            "2.5": [0.5, 4.0],
-            "10.0": [4.0, 220.0]
-          }
-        },
-    {
+ {
           "data_type": "model_ensemble",
           "data_extractor": "ModelStageExtractor",
           "height_level_variables": [
@@ -78,6 +55,29 @@
          "forecast_ref_template": "{frt.year:04d}{frt.month:02d}{frt.day:02d}T{frt.hour:02d}00Z.nc.file",
           "fname_template": "{vt.year:04d}{vt.month:02d}{vt.day:02d}T{vt.hour:02d}00Z-PT{lead_time:04d}H00M-{var_name}.nc",
           "model_fname_prefix": "prd_mogreps_g"
+        },
+{
+          "data_type": "radar",
+          "dataset": "radar",
+          "data_extractor": "RadarExtractor",
+          "source_root": "moose:/adhoc/projects/radar_archive/data/comp/products/composites/",
+          "fname_mass_template": "{dt.year:04d}{dt.month:02d}{dt.day:02d}.tar",
+          "variable_fname_template": "{timestamp}_{product}_{resolution}_{area}",
+          "intermediate_fname_template": "{product}_{selected_day.year:04d}{selected_day.month:02d}{selected_day.day:02d}.nc",
+          "archive_time_chunk": 24,
+          "products": {
+            "composite_rainfall": "nimrod_ng_radar_rainrate_composite",
+            "composite_quality": "nimrod_ng_radar_qualityproduct_composite"
+          },
+          "resolution": "1km",
+          "area": "UK",
+          "radar_fname_prefix": "prd_radar",
+
+          "rainfall_thresholds": {
+            "0.25": [0.0, 0.5],
+            "2.5": [0.5, 4.0],
+            "10.0": [4.0, 220.0]
+          }
         }
   ]
 }
