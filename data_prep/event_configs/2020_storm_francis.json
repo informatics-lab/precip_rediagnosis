@@ -1,9 +1,9 @@
 {
-  "event_name": "202002_storm_dennis",
-  "Event description": " This is a large storm for which there was a lot of rainfall, with a red rainfall warning.",
+  "event_name": "202008_storm_francis",
+  "Event description": " Unseasonal summer wind and rain storm in August 2020.",
   "science_info": [
-    "https://www.metoffice.gov.uk/weather/warnings-and-advice/uk-storm-centre/storm-dennis",
-    "https://www.metoffice.gov.uk/binaries/content/assets/metofficegovuk/pdf/weather/learn-about/uk-past-events/interesting/2020/2020_03_storm_dennis.pdf"
+    "Met Office info sheet: https://www.metoffice.gov.uk/binaries/content/assets/metofficegovuk/pdf/weather/learn-about/uk-past-events/interesting/2020/2020_08_storms_ellen_francis.pdf"
+
   ],
   "event_start": "2020-02-14T18:00Z",
   "event_end": "2020-02-17T18:00Z",
@@ -30,12 +30,12 @@
       "resolution": "1km",
       "area": "UK",
       "radar_fname_prefix": "prd_radar",
-      "rainfall_thresholds": {
-        "0.25": [0.0, 0.5],
-        "2.5": [0.5, 4.0],
-        "7.0": [4.0, 10.0],
-        "10.0": [10.0, 220.0]
-      }
+          "rainfall_thresholds": {
+             "0.25": [0.0, 0.5],
+             "2.5": [0.5, 4.0],
+             "7.0": [4.0, 10.0],
+             "10.0": [10.0, 220.0]
+          }
     },
     {
       "data_type": "model_ensemble",
