@@ -54,20 +54,22 @@ def merge_data(drivers_list, merge_vars, output_path):
 
 def main():
     cmd_args = get_args()
-    logger1 = drivers.get_logger(cmd_args.log_dir,
-                                 drivers.MassExtractor.LOGGER_KEY,
-                                 cmd_args.output_level)
-    logger1.info('Running extract and prepare workflow for precip rediagnosis.')
-    logger1.info(f'reading config from {cmd_args.config_file}')
     with open(cmd_args.config_file) as config_file:
         dataset_config = json.load(config_file)
+    event_name = dataset_config['event_name']
+
+    logger1 = drivers.get_logger(cmd_args.log_dir,
+                                 drivers.MassExtractor.LOGGER_KEY + '_' + event_name,
+                                 cmd_args.output_level)
+
+    logger1.info('Running extract and prepare workflow for precip rediagnosis.')
+    logger1.info(f'reading config from {cmd_args.config_file}')
 
     start_dt = datetime.datetime.strptime(dataset_config['event_start'],
                                           DATETIME_PARSER)
 
     end_dt = datetime.datetime.strptime(dataset_config['event_end'],
                                         DATETIME_PARSER)
-    event_name = dataset_config['event_name']
     dest_dir = pathlib.Path(cmd_args.output_path) / event_name
     if not dest_dir.is_dir():
         dest_dir.mkdir()
@@ -89,33 +91,39 @@ def main():
     }
     driver_list = []
 
-    for data_source_cfg in dataset_config['data_sources']:
-        logger1.info(f'processing data source of type {data_source_cfg["data_type"]}')
-        driver_init_args['opts'] = data_source_cfg
-        driver1 = drivers.extractor_factory(data_source_cfg['data_extractor'],
-                                            driver_init_args)
-        logger1.info(f'Running extract for {data_source_cfg["data_type"]}')
-        logger1.info(f'Running extract for {data_source_cfg["data_type"]}')
-        driver1.extract()
-        logger1.info(f'Running prepare for {data_source_cfg["data_type"]}')
-        driver1.prepare()
-        driver_list += [driver1]
+    try:
+        for data_source_cfg in dataset_config['data_sources']:
+            logger1.info(f'processing data source of type {data_source_cfg["data_type"]}')
+            driver_init_args['opts'] = data_source_cfg
+            driver1 = drivers.extractor_factory(data_source_cfg['data_extractor'],
+                                                driver_init_args)
+            logger1.info(f'Running extract for {data_source_cfg["data_type"]}')
+            logger1.info(f'Running extract for {data_source_cfg["data_type"]}')
+            driver1.extract()
+            logger1.info(f'Running prepare for {data_source_cfg["data_type"]}')
+            driver1.prepare()
+            driver_list += [driver1]
 
-    logger1.info('merging data from different sources into one dataframe')
-    merged_df = drivers.merge_prepared_output(
-        extractor_list=driver_list,
-        merge_vars=dataset_config['merge_vars'],
-        merge_method='inner')
+        logger1.info('merging data from different sources into one dataframe')
+        merged_df = drivers.merge_prepared_output(
+            extractor_list=driver_list,
+            merge_vars=dataset_config['merge_vars'],
+            merge_method='inner')
 
-    # generate output filename and path
-    start_dt = min(merged_df['time'])
-    end_dt = max(merged_df['time'])
-    fname_timestamp = dataset_config['date_fname_template'].format(start=start_dt, end=end_dt)
-    merged_fname = dataset_config['merged_outpout_prefix'] + '_' + fname_timestamp + dataset_config['fname_extension_tabular']
-    merged_output_path = dest_dir / merged_fname
-    logger1.info(f'writing merged dataframe to {merged_output_path}')
+        # generate output filename and path
+        start_dt = min(merged_df['time'])
+        end_dt = max(merged_df['time'])
+        fname_timestamp = dataset_config['date_fname_template'].format(start=start_dt, end=end_dt)
+        merged_fname = dataset_config['merged_outpout_prefix'] + '_' + fname_timestamp + dataset_config['fname_extension_tabular']
+        merged_output_path = dest_dir / merged_fname
+        logger1.info(f'writing merged dataframe to {merged_output_path}')
+        merged_df.to_csv(merged_output_path, index=False)
+    except BaseException as e1:
+        logger1.error(str(e1))
+        raise e1
 
-    merged_df.to_csv(merged_output_path, index=False)
     logger1.info('processing completed successfully.')
+
+
 if __name__ == '__main__':
     main()

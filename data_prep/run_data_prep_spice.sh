@@ -1,17 +1,19 @@
 #!/bin/bash -l
 #SBATCH --mem=96GB
 #SBATCH --ntasks=8
-#SBATCH --output=/scratch/shaddad/prd_debug/run_spice_2018_callum.out
-#SBATCH --error=/scratch/shaddad/prd_debug/run_spice_2018_callum.err
+#SBATCH --output=/scratch/shaddad/prd_debug/run_spice_20220726.out
+#SBATCH --error=/scratch/shaddad/prd_debug/run_spice_20220726.err
 #SBATCH --time=240
 
 
-export EVENT_NAME=2020_storm_dennis.json
+#export EVENT_NAME=${1}
+#export EVENT_NAME=2020_storm_dennis
+
 echo Processing event ${EVENT_NAME}
 
 export SRC_PATH=$HOME/prog/precip_rediagnosis/
 export OUTPUT_PATH=/scratch/shaddad/precip_rediagnosis/train_202207
-export EVENT_CONFIG=${SRC_PATH}/data_prep/event_configs/${EVENT_NAME}
+export EVENT_CONFIG=${SRC_PATH}/data_prep/event_configs/${EVENT_NAME}.json
 export TARGET_CUBE_PATH=/project/informatics_lab/precip_rediagnosis/target_cube.nc
 
 conda activate prd_data_prep

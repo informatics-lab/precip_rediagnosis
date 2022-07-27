@@ -27,13 +27,14 @@ def run_shell_cmd(shell_cmd, logger):
     try:
         logger.info(f'running cmd:\n{shell_cmd}')
         cmd_output = subprocess.check_output(shell_cmd, shell=True)
+        logger.info(f'get command output:\n{cmd_output}')
     except subprocess.CalledProcessError as err1:
         logger.error(
             'return code = {err1.returncode}\n'
             f'output = {err1.output}\n'
             f'error output = {err1.stderr}')
+        raise err1
 
-    logger.info(f'get command output:\n{cmd_output}')
     return cmd_output
 
 
@@ -439,19 +440,16 @@ class RadarExtractor(MassExtractor):
         radar_crs = radar_cubes[0].coord_system().as_cartopy_crs()
 
         # Create some helper arrays for converting from our radar grid to the mogreps-g grid
-        proj_y_grid = numpy.tile(
-            radar_cubes[0].coord('projection_y_coordinate').points.reshape(
-                radar_cubes[0].shape[1], 1), [1, radar_cubes[0].shape[2]])
-        proj_x_grid = numpy.tile(
-            radar_cubes[0].coord('projection_x_coordinate').points.reshape(
-                1,radar_cubes[0].shape[2]), [radar_cubes[0].shape[1], 1])
+        X_radar,Y_radar = numpy.meshgrid(radar_cubes[0].coord('projection_x_coordinate').points, 
+                                         radar_cubes[0].coord('projection_y_coordinate').points,)
 
-        ret_val = self._target_grid_cube.coord_system().as_cartopy_crs().transform_points(
+        target_crs = target_grid_cube.coord_system().as_cartopy_crs()
+        ret_val = target_crs.transform_points(
             radar_crs,
-            proj_y_grid,
-            proj_x_grid,
-        )
-
+            X_radar,
+            Y_radar,
+        )        
+        
         lat_vals = ret_val[:, :, 1]
         lon_vals = ret_val[:, :, 0]
 
