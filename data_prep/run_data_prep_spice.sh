@@ -1,14 +1,10 @@
 #!/bin/bash -l
 #SBATCH --mem=96GB
 #SBATCH --ntasks=8
-#SBATCH --output=/scratch/shaddad/prd_debug/run_spice_20220726.out
-#SBATCH --error=/scratch/shaddad/prd_debug/run_spice_20220726.err
 #SBATCH --time=240
-
 
 #export EVENT_NAME=${1}
 #export EVENT_NAME=2020_storm_dennis
-
 echo Processing event ${EVENT_NAME}
 
 export SRC_PATH=$HOME/prog/precip_rediagnosis/
