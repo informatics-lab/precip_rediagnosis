@@ -57,10 +57,10 @@ def get_logger(log_dir, logger_key, level='info'):
     formatter = logging.Formatter(
         '%(asctime)s | %(levelname)s | %(message)s',
         '%m-%d-%Y %H:%M:%S')
-    logger = logging.getLogger('extract_mass')
+    logger = logging.getLogger(logger_key)
 
     handler1 = logging.FileHandler(
-        logs_directory / f'extract_mass_{current_timestamp}.log')
+        logs_directory / f'{logger_key}_{current_timestamp}.log')
     handler1.setLevel(logging.INFO)
     handler1.setFormatter(formatter)
     logger.addHandler(handler1)
@@ -118,6 +118,7 @@ class MassExtractor():
         self._fname_extension_tabular = opts_dict['fname_extension_tabular']
         self._output_level = opts_dict['output_level']
         self._merge_data = None
+        self._event_name =  opts_dict['event_name']
 
         self._create_logger()
 
@@ -132,7 +133,7 @@ class MassExtractor():
 
     def _create_logger(self):
         self.logger = get_logger(self._log_dir,
-                                 MassExtractor.LOGGER_KEY,
+                                 MassExtractor.LOGGER_KEY + '_' + self._event_name,
                                  level=self._output_level,
                                  )
 
@@ -443,7 +444,7 @@ class RadarExtractor(MassExtractor):
         X_radar,Y_radar = numpy.meshgrid(radar_cubes[0].coord('projection_x_coordinate').points, 
                                          radar_cubes[0].coord('projection_y_coordinate').points,)
 
-        target_crs = target_grid_cube.coord_system().as_cartopy_crs()
+        target_crs = self._target_grid_cube.coord_system().as_cartopy_crs()
         ret_val = target_crs.transform_points(
             radar_crs,
             X_radar,
@@ -757,8 +758,8 @@ class RadarExtractor(MassExtractor):
         cubelist_to_save = iris.cube.CubeList(radar_regrided_cubes.values())
 
         fname_timestamp = self._date_fname_template.format(
-            start=self._date_range[0],
-            end=self._date_range[1],
+            start=self._target_time_range[0],
+            end=self._target_time_range[-1],
             )
         # Save gridded radar data as a netcdf file
         grid_fname = self._opts['radar_fname_prefix'] + '_' + fname_timestamp + self._fname_extension_grid

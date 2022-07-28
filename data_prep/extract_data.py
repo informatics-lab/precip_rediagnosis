@@ -88,6 +88,7 @@ def main():
         'fname_extension_grid': dataset_config['fname_extension_grid'],
         'fname_extension_tabular': dataset_config['fname_extension_tabular'],
         'output_level': cmd_args.output_level,
+        'event_name': event_name,
     }
     driver_list = []
 
