@@ -514,10 +514,14 @@ class RadarExtractor(MassExtractor):
         radar_fname_template = self._opts['intermediate_fname_template']
         product1 = 'composite_rainfall'
         radar_data_dir = self._dest_path / self._opts['dataset']
-        radar_cube = iris.cube.CubeList([iris.load_cube(
-            str(radar_data_dir / radar_fname_template.format(selected_day=dt1,
-                                                             product=product1)))
-            for dt1 in radar_days]).concatenate_cube()
+        cl1 = iris.cube.CubeList([
+            iris.load_cube(str(radar_data_dir / radar_fname_template.format(
+                selected_day=dt1,
+                product=product1)))
+            for dt1 in radar_days])
+        iris.util.equalise_attributes(cl1)
+        radar_cube = cl1.concatenate_cube()
+
         validity_times = calc_dates_list(self._date_range[0],
                                          self._date_range[1],
                                          self._target_time_delta,
