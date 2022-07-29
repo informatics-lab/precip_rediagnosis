@@ -75,15 +75,60 @@ def train_model(model, data_splits):
                         validation_split=0.25, verbose=True)
     return model
     
+
 def load_data(current_ws, dataset_name):
     dataset = azureml.core.Dataset.get_by_name(current_ws, name=dataset_name)
     input_data = dataset.to_pandas_dataframe()    
     return input_data
 
-def preprocess_data(input_data, feature_dict):
-    # drop NaN values in the dataset
+
+def sample_data(df, test_fraction=0.2, savefn=None, random_state=None):
+    n_samples = df.shape[0]
+    test_dataset = df.sample(int(n_samples*test_fraction), random_state=random_state)
+    train_dataset = df[~np.isin(df.index, test_dataset.index)]
+    if savefn:
+        test_dataset.to_csv(savefn)
+        return train_dataset
+    else: 
+        return train_dataset, test_dataset
+
+
+def seperate_target_feature(df, target, features, profiles=False):
+    if profiles:
+        prof_feature_columns = [s for s in df.columns for vars in features if s.startswith(vars)]
+        features_df = df[prof_feature_columns]
+        features_df = np.transpose(features_df.to_numpy().reshape(features_df.shape[0], len(features), len(prof_feature_columns)//len(features)), (0, 2, 1))
+    else:
+        features_df = df[features]
+        
+    target_df = df[[target]]
     
+    return features_df, target_df
+
+
+def load_test_data(test_fn, feature_dict):
+    """TO DO: where will test data be stored and 
+    therefore where do we want to point to?"""
+    test_data = pd.read_csv(test_fn)
+    X_test, y_test = seperate_target_feature(
+            test_data,
+            feature_dict['target'],
+            feature_dict['profile'],
+            profiles=True) 
+    if len(feature_dict['single_level']) > 0:
+        X_test_snglvl, y_test = seperate_target_feature(
+            test_data, 
+            feature_dict['target'],
+            feature_dict['single_level'])
+        X_test = [X_test, X_test_snglvl]
+    return X_test, y_test
+
+
+def preprocess_data(input_data, feature_dict, test_fraction, test_savefn=None):
+    # drop NaN values in the dataset
     data = input_data.dropna()
+
+    # drop data points with zero precip in the radar data
     data = data[data[feature_dict['target']]>0]
 
     # Get a list of columns names for profile features
@@ -93,64 +138,72 @@ def preprocess_data(input_data, feature_dict):
     features = data[prof_feature_columns + feature_dict['single_level']]
     
     target = data[[feature_dict['target']]]
-    # drop data points with zero precip in the radar data
     
+    # Scale data to have zero mean and standard deviation of one
     standardScaler = StandardScaler()
-
-    features = pd.DataFrame(standardScaler.fit_transform(features), 
-                                columns=features.columns,
-                                index=features.index)
+    features = pd.DataFrame(
+        standardScaler.fit_transform(features), 
+        columns=features.columns,
+        index=features.index)
     processed_data = pd.concat([features, target], axis=1, sort=False)
 
-    # Height profiles data
-    X_train_prof, X_test_prof, y_train, y_test = train_test_split(
-        features[prof_feature_columns],
-        target,
-        test_size=0.2,
-        random_state=1
-    )
+    # Extract and save test dataset
+    training_data = sample_data(
+        processed_data,
+        test_fraction=test_fraction,
+        savefn=test_savefn,
+        random_state=0)
 
-    # Single level data
-    X_train_singlvl, X_test_singlvl, y_train, y_test = train_test_split(
-        features[feature_dict['single_level']],
-        target,
-        test_size=0.2,
-        random_state=1
-    )
+    # Extract and return train and validate datasets
+    training_data, val_data = sample_data(
+        training_data,
+        test_fraction=test_fraction/(1-test_fraction),
+        random_state=0)
 
-    # reshape height profile variables 
-    X_train_prof = np.transpose(X_train_prof.to_numpy().reshape(X_train_prof.shape[0], 2, 33), (0, 2, 1))
-    X_test_prof = np.transpose(X_test_prof.to_numpy().reshape(X_test_prof.shape[0], 2, 33), (0, 2, 1))
-    # y_test and y_train is the same in both of these, given that the random state is set    
-    
+    X_train, y_train = seperate_target_feature(
+            training_data,
+            feature_dict['target'],
+            feature_dict['profile'],
+            profiles=True)
+
+    X_val, y_val = seperate_target_feature(
+            val_data,
+            feature_dict['target'],
+            feature_dict['profile'],
+            profiles=True)
+
+    if len(feature_dict['single_level']) > 0:
+        X_train_snglvl, y_train = seperate_target_feature(
+            training_data,
+            feature_dict['target'],
+            feature_dict['single_level'])
+        X_train = [X_train, X_train_snglvl]
+        
+        X_val_snglvl, y_val = seperate_target_feature(
+            val_data,
+            feature_dict['target'],
+            feature_dict['single_level'])
+        X_val = [X_val, X_val_snglvl]
+
     data_dims_dict = {
         'nprof_features' : len(feature_dict['profile']),
         'nheights' : len(prof_feature_columns)//len(feature_dict['profile']),
         'nsinglvl_features' :len(feature_dict['single_level']),
     }
-    
-    if data_dims_dict['nsinglvl_features'] > 0:
-        X_train = [X_train_prof, X_train_singlvl]
-        X_test = [X_test_prof, X_test_singlvl]
-    else:
-        X_train = X_train_prof
-        X_test = X_test_prof  
-        
+
     data_splits = {'X_train': X_train,
-                   'X_test': X_test,
+                   'X_val': X_val,
                    'y_train': y_train,
-                   'y_test' : y_test,
+                   'y_val' : y_val,
                   }
     return data_splits, data_dims_dict
 
+
 def calc_metrics(current_run, data_splits, y_pred):
     metrics_dict = {}
-    metrics_dict['mean_absolute_error'] = mean_absolute_error(data_splits['y_test'], y_pred)
-    metrics_dict['R-squared score'] = r2_score(data_splits['y_test'], y_pred)
+    metrics_dict['mean_absolute_error'] = mean_absolute_error(data_splits['y_val'], y_pred)
+    metrics_dict['R-squared score'] = r2_score(data_splits['y_val'], y_pred)
     for k1, v1 in metrics_dict.items():
         current_run.log(k1, v1)
     return metrics_dict
-
-
-        
     
