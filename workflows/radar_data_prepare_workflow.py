@@ -4,7 +4,7 @@ import os
 from re import sub as resub
 
 from dagster import (
-    asset, get_dagster_logger, job, op,
+    asset, get_dagster_logger, job, op, graph,
     DynamicOut, DynamicOutput,
     Out,
 )
@@ -44,6 +44,13 @@ def dates_to_extract(context):
         freq=datetime.timedelta(hours=delta_hours)
     ).to_pydatetime())
     return dates
+
+
+##########
+#
+# Loading of data assets.
+#
+##########
 
 
 @op
@@ -95,6 +102,13 @@ def locate_target_grid_cube(context):
 @asset
 def target_grid_cube(full_filepath):
     return iris.load_cube(full_filepath)
+
+
+##########
+#
+# Metadata handling.
+#
+##########
 
 
 @op(out={"lat_vals": Out(), "lon_vals": Out()})
@@ -167,6 +181,38 @@ def calc_target_cube_indices(lat_vals, lon_vals, radar_cube, target_grid_cube):
             lat_target_index[arr1, arr2] = i_lat
             num_cells[i_lat, i_lon] = len(arr1)
     return lat_target_index, lon_target_index, num_cells
+
+
+##########
+#
+# Regrid prep.
+#
+##########
+
+
+@graph
+def regridding_arrays():
+    regridded_arrays = {}
+    return regridded_arrays
+
+
+##########
+#
+# Regrid operations.
+#
+##########
+
+
+# @op
+# def regrid():
+#     pass
+
+
+##########
+#
+# Job definition and helper functions.
+#
+##########
 
 
 # XXX: should be shared with extract workflow, not duplicated.
