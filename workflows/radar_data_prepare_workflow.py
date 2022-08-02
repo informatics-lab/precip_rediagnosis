@@ -68,6 +68,11 @@ def radar_cube(cubes):
 
 
 @asset
+def radar_cube_latlon(lat_vals, lon_vals, radar_cube):
+    return add_latlon_coords(lat_vals, lon_vals, radar_cube)
+
+
+@asset
 def radar_cube_3hr(radar_cube):
     # radar_agg_3hr = radar_cube.copy()
     iccat.add_hour(radar_cube, coord='time')
@@ -168,6 +173,7 @@ def calc_target_cube_indices(lat_vals, lon_vals, radar_cube, target_grid_cube):
 @op(out=DynamicOut())
 def dynamicise(l):
     """Convert an ordinary Python iterable `l` into a dagster dynamic output."""
+    # Make a unique keyname from ascii-only elements of random strings from `/dev/urandom`.
     key = resub(r"\W", "", b64encode(os.urandom(16)).decode("utf-8")[:16])
     for i, l_itm in enumerate(l):
         yield DynamicOutput(l_itm, mapping_key=f"{key}_{i}")
@@ -175,15 +181,17 @@ def dynamicise(l):
 
 @job
 def radar_preprocess():
+    # Load relevant data (within the required time window).
     dates = dynamicise(dates_to_extract())
     datasets = dates.map(load_input_dataset)
     rcube = radar_cube(datasets.collect())
-    rcube_agg_3hr = radar_cube_3hr(rcube)
     tgt_grid_cube = target_grid_cube(locate_target_grid_cube())
 
+    # Add required extra metadata.
     lat_vals, lon_vals = calc_lat_lon_coords(rcube, tgt_grid_cube)
+    rcube_latlon = radar_cube_latlon(lat_vals, lon_vals, rcube)
+    rcube_agg_3hr = radar_cube_3hr(rcube_latlon)
+
     lat_target_index, lon_target_index, num_cells = calc_target_cube_indices(
-        lat_vals, lon_vals, radar_cube
+        lat_vals, lon_vals, rcube_latlon
     )
-    cubes = dynamicise([rcube, rcube_agg_3hr])
-    rcube, rcube_agg_3hr = cubes.map(lambda c: add_latlon_coords(lat_vals, lon_vals, c)).collect()
