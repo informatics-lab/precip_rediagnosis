@@ -10,3 +10,7 @@ ops:
       data_path: "/Users/dpeterk/data/PRd"
       dataset_filename_template: "nimrod_ng_radar_{product}_{dt.year:04d}{dt.month:02d}{dt.day:02d}.nc"
       product: rainrate_composite
+  locate_target_grid_cube:
+    config:
+      data_path: "/Users/dpeterk/data/PRd"
+      filename: ""
