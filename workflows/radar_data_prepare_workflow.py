@@ -55,9 +55,9 @@ def dates_to_extract(context):
 ##########
 
 
-@op
+@op(required_resource_keys={"setup"})
 def load_input_dataset(context, date):
-    filepath = context.op_config["data_path"]
+    filepath = context.resources.setup["data_path"]
     filename = context.op_config["dataset_filename_template"].format(
         product=context.op_config["product"],
         dt=date
@@ -94,9 +94,9 @@ def radar_cube_3hr(radar_cube):
     return radar_agg_3hr
 
 
-@op
+@op(required_resource_keys={"setup"})
 def locate_target_grid_cube(context):
-    filepath = context.op_config["data_path"]
+    filepath = context.resources.setup["data_path"]
     filename = context.op_config["dataset_filename_template"]
     return os.path.join(filepath, filename)
 
@@ -509,23 +509,29 @@ def df_nan_exclude(context, data_df):
 ##########
 
 
-# @op
-# def iris_save():
-#     fname_timestamp = self._date_fname_template.format(
-#         start=self._target_time_range[0],
-#         end=self._target_time_range[-1],
-#         )
-#     # Save gridded radar data as a netcdf file
-#     grid_fname = self._opts['radar_fname_prefix'] + '_' + fname_timestamp + self._fname_extension_grid
-#     iris.save(cubelist_to_save, radar_data_dir / grid_fname)
+@op
+def filename_timestamp(context, dates):
+    """Format the timestamp to add to the saved artifacts' filenames."""
+    filename_template = context.op_config["date_fname_template"]
+    return filename_template.format(start=dates[0], end=dates[-1])
 
 
-# @op
-# def save_csv(context, data_df):
-#     radar_tab_fname = (self._opts['radar_fname_prefix'] + '_' +
-#                         fname_timestamp + self._fname_extension_tabular
-#                         )
-#     data_df.to_csv(radar_data_dir / radar_tab_fname, index=False)
+@op(required_resource_keys={"setup"})
+def iris_save(context, cubelist, filename):
+    """Save the regridded data to NetCDF using Iris."""
+    radar_data_dir = context.resources.setup["data_path"]
+    filename_prefix = context.resources.setup["radar_fname_prefix"]
+    full_filename = f"{filename_prefix}_{filename}.nc"
+    iris.save(cubelist, os.path.join(radar_data_dir, full_filename))
+
+
+@op(required_resource_keys={"setup"})
+def save_csv(context, data_df, filename):
+    """Save the flattened dataframe of regridded data to CSV."""
+    radar_data_dir = context.resources.setup["data_path"]
+    filename_prefix = context.resources.setup["radar_fname_prefix"]
+    radar_csv_filename = f"{filename_prefix}_{filename}.csv"
+    data_df.to_csv(os.path.join(radar_data_dir, radar_csv_filename), index=False)
 
 
 ##########
@@ -547,7 +553,10 @@ def dynamicise(l):
 
 @job(
     resource_defs={
-        "setup": make_values_resource(rainfall_thresholds=list),
+        "setup": make_values_resource(
+            data_path=str,
+            rainfall_thresholds=list,
+        ),
         "regrid": make_values_resource(
             var_names=list,
             var_types=list,
@@ -601,5 +610,6 @@ def radar_preprocess():
     radar_df = df_nan_exclude(process_vector_df(process_scalar_df(scalar_dfs), vector_dfs))
 
     # Store results.
-    # iris_save(regridded_cubes)
-    # save_csv(radar_df)
+    filename = filename_timestamp(dates)
+    iris_save(regridded_cubes, filename)
+    save_csv(radar_df, filename)

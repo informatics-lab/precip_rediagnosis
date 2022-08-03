@@ -1,6 +1,8 @@
 resources:
   setup:
     config:
+      data_path: "/Users/dpeterk/data/PRd"
+      radar_fname_prefix: prd_radar
       rainfall_thresholds:
       - 0.25
       - 2.5
@@ -50,23 +52,11 @@ ops:
       event_end: 2020-02-17T18:00Z
   load_input_dataset:
     config:
-      data_path: "/Users/dpeterk/data/PRd"
       dataset_filename_template: "nimrod_ng_radar_{product}_{dt.year:04d}{dt.month:02d}{dt.day:02d}.nc"
       product: rainrate_composite
   locate_target_grid_cube:
     config:
-      data_path: "/Users/dpeterk/data/PRd"
       filename: ""
-
-
-# {'radar_fraction_in_band_aggregate_3hr': 'VECTOR',
-# 'radar_fraction_in_band_instant': 'VECTOR',
-# 'bands_mask': 'MASK_VECTOR',
-# 'scalar_value_mask': 'MASK_SCALAR',
-# 'radar_max_rain_aggregate_3hr': 'SCALAR',
-# 'radar_mean_rain_aggregate_3hr': 'SCALAR',
-# 'radar_max_rain_instant': 'SCALAR',
-# 'radar_mean_rain_instant': 'SCALAR',
-# 'fraction_sum_agg': 'SCALAR',
-# 'fraction_sum_instant': 'SCALAR',
-# }
+  filename_timestamp:
+    config:
+      date_fname_template: "{start.year:04d}{start.month:02d}{start.day:02d}T{start.hour:02d}{start.minute:02d}Z_{end.year:04d}{end.month:02d}{end.day:02d}T{end.hour:02d}{end.minute:02d}Z"
