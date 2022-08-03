@@ -238,7 +238,7 @@ def gather_regrid_arrays(context, arrays):
 ##########
 
 
-@op
+@op(required_resource_keys={"setup"})
 def regrid(
     context,
     radar_agg_3hr, tgt_grid_cube,
@@ -343,6 +343,110 @@ def regrid(
 ##########
 
 
+@op(required_resource_keys={"setup"})
+def build_extra_coords(context, validity_times):
+    rainfall_thresholds = context.resources.setup["rainfall_thresholds"]
+    band_coord = iris.coords.DimCoord(
+        [float(t) for t in rainfall_thresholds.keys()],
+        bounds=list(rainfall_thresholds.values()),
+        var_name='band',
+        units='mm',
+    )
+    radar_time_coord = iris.coords.DimCoord(
+        [vt.timestamp() for vt in validity_times],
+        var_name='time',
+        units=radar_cube.coord('time').units,
+    )
+    return band_coord, radar_time_coord
+
+
+# @op
+# def build_num_cells_cube(num_cells, target_lat_coord, target_lon_coord):
+#     # XXX output not used!
+#     num_cells_cube = iris.cube.Cube(
+#             data=num_cells,
+#             dim_coords_and_dims=(
+#              (target_lat_coord, 0), (target_lon_coord, 1),),
+#             var_name='num_radar_cells',
+#         )
+#     return num_cells_cube
+
+
+@op
+def collate_coords(target_grid_cube, radar_time_coord, band_coord):
+    """
+    Make a list of the coords needed for the regridded data cubes
+    for ease of passing to downstream functions.
+
+    """
+    lat_coord = target_grid_cube.coord('latitude')
+    lon_coord = target_grid_cube.coord('longitude')
+    return [radar_time_coord, lat_coord, lon_coord, band_coord]
+
+
+@op(required_resource_keys={"regrid"})
+def get_arrays_by_type(context, array_type):
+    var_names = context.resources.regrid["var_names"]
+    var_types = context.resources.regrid["var_types"]
+    return [vname for (vname, vtype) in zip(var_names, var_types) if vtype == array_type.upper()]
+
+
+@op(required_resource_keys={"regrid"})
+def build_vector_cubes(context, var_name, regridded_arrays_dict, coords):
+    var_names = context.resources.regrid["var_names"]
+    long_names = context.resources.regrid["output_long_names"]
+    long_name = long_names[var_names.index(var_name)]
+
+    data = np.ma.MaskedArray(
+        data=regridded_arrays_dict[var_name],
+        mask=regridded_arrays_dict['bands_mask']
+    )
+    radar_time_coord, target_lat_coord, target_lon_coord, band_coord = coords
+    dcad = (
+        (radar_time_coord, 0),
+        (target_lat_coord, 1),
+        (target_lon_coord, 2),
+        (band_coord, 3)
+    )
+    return iris.cube.Cube(
+        data=data,
+        dim_coords_and_dims=dcad,
+        units=None,
+        var_name=var_name,
+        long_name=long_name
+    )
+
+
+@op(required_resource_keys={"regrid"})
+def build_scalar_cubes(context, var_name, regridded_arrays_dict, coords):
+    var_names = context.resources.regrid["var_names"]
+    long_names = context.resources.regrid["output_long_names"]
+    long_name = long_names[var_names.index(var_name)]
+
+    data = np.ma.MaskedArray(
+        data=regridded_arrays_dict[var_name],
+        mask=regridded_arrays_dict['scalar_value_mask'],
+    )
+    radar_time_coord, target_lat_coord, target_lon_coord, _ = coords
+    dcad = (
+        (radar_time_coord, 0),
+        (target_lat_coord, 1),
+        (target_lon_coord, 2)
+    )
+    return iris.cube.Cube(
+        data=data,
+        dim_coords_and_dims=dcad,
+        units='mm',
+        var_name=var_name,
+        long_name=long_name
+    )
+
+
+@op
+def build_regridded_cubelist(vector_cubes, scalar_cubes):
+    return iris.cube.CubeList(vector_cubes.extend(scalar_cubes))
+
+
 ##########
 #
 # Job definition and helper functions.
@@ -365,7 +469,8 @@ def dynamicise(l):
         "setup": make_values_resource(rainfall_thresholds=list),
         "regrid": make_values_resource(
             var_names=list,
-            var_types=list
+            var_types=list,
+            output_long_names=list,
         )
     }
 )
@@ -396,4 +501,13 @@ def radar_preprocess():
         lon_target_index, lat_target_index
     )
 
-    # Regrid post-process.
+    # Regrid post-processing.
+    band_coord, radar_time_coord = build_extra_coords(dates)
+    # XXX Output not used elsewhere in workflow? Can remove `num_cells` too if not used.
+    # num_cells_cube = build_num_cells_cube(num_cells, lat_target_index, lon_target_index)
+    regrid_coords = collate_coords(tgt_grid_cube, radar_time_coord, band_coord)
+    vector_names = dynamicise(get_arrays_by_type("vector"))
+    vector_cubes = vector_names.map(lambda n: build_vector_cubes(n, regrid_data_dict, regrid_coords))
+    scalar_names = dynamicise(get_arrays_by_type("scalar"))
+    scalar_cubes = scalar_names.map(lambda n: build_scalar_cubes(n, regrid_data_dict, regrid_coords))
+    regridded_cubes = build_regridded_cubelist(vector_cubes.collect(), scalar_cubes.collect())
