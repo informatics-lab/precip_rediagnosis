@@ -342,8 +342,10 @@ def regrid(
 #
 ##########
 
-
-@op(required_resource_keys={"setup"})
+@op(
+    required_resource_keys={"setup"},
+    out={"band_coord": Out(), "radar_time_coord": Out()}
+)
 def build_extra_coords(context, validity_times):
     rainfall_thresholds = context.resources.setup["rainfall_thresholds"]
     band_coord = iris.coords.DimCoord(
@@ -372,7 +374,7 @@ def build_extra_coords(context, validity_times):
 #     return num_cells_cube
 
 
-@op
+@op(out={"coords": Out()})
 def collate_coords(target_grid_cube, radar_time_coord, band_coord):
     """
     Make a list of the coords needed for the regridded data cubes
@@ -381,14 +383,21 @@ def collate_coords(target_grid_cube, radar_time_coord, band_coord):
     """
     lat_coord = target_grid_cube.coord('latitude')
     lon_coord = target_grid_cube.coord('longitude')
-    return [radar_time_coord, lat_coord, lon_coord, band_coord]
+    return (radar_time_coord, lat_coord, lon_coord, band_coord)
 
 
-@op(required_resource_keys={"regrid"})
-def get_arrays_by_type(context, array_type):
+@op(
+    required_resource_keys={"regrid"},
+    out={"vector_var_names": Out(), "scalar_var_names": Out()}
+)
+def get_arrays_by_type(context):
     var_names = context.resources.regrid["var_names"]
     var_types = context.resources.regrid["var_types"]
-    return [vname for (vname, vtype) in zip(var_names, var_types) if vtype == array_type.upper()]
+    target_var_types = ["VECTOR", "SCALAR"]
+    names = []
+    for array_type in target_var_types:
+        names.append([n for (n, t) in zip(var_names, var_types) if t == array_type])
+    return tuple(names[0]), tuple(names[1])
 
 
 @op(required_resource_keys={"regrid"})
@@ -506,8 +515,9 @@ def radar_preprocess():
     # XXX Output not used elsewhere in workflow? Can remove `num_cells` too if not used.
     # num_cells_cube = build_num_cells_cube(num_cells, lat_target_index, lon_target_index)
     regrid_coords = collate_coords(tgt_grid_cube, radar_time_coord, band_coord)
-    vector_names = dynamicise(get_arrays_by_type("vector"))
+    vector_var_names, scalar_var_names = get_arrays_by_type()
+    vector_names = dynamicise(vector_var_names)
     vector_cubes = vector_names.map(lambda n: build_vector_cubes(n, regrid_data_dict, regrid_coords))
-    scalar_names = dynamicise(get_arrays_by_type("scalar"))
+    scalar_names = dynamicise(scalar_var_names)
     scalar_cubes = scalar_names.map(lambda n: build_scalar_cubes(n, regrid_data_dict, regrid_coords))
     regridded_cubes = build_regridded_cubelist(vector_cubes.collect(), scalar_cubes.collect())
