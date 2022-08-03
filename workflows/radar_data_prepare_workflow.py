@@ -4,7 +4,7 @@ import os
 from re import sub as resub
 
 from dagster import (
-    asset, get_dagster_logger, job, op, graph,
+    asset, get_dagster_logger, job, make_values_resource, op, graph,
     DynamicOut, DynamicOutput,
     Out,
 )
@@ -156,7 +156,7 @@ def calc_target_cube_indices(lat_vals, lon_vals, radar_cube, target_grid_cube):
     :param lat_vals: A 1D array of the target latitude values
     :param lon_vals: A 1D array of the target longitude values
     :param radar_cube: The source radar cube for the calculating the mapping
-    :return: 2D numpy arrays with a mapping for each cell in the radar
+    :return: 2D np arrays with a mapping for each cell in the radar
     cube to the index in latitude and longitude of the target cube.
     """
     lat_target_index = -1 * np.ones(
@@ -190,10 +190,45 @@ def calc_target_cube_indices(lat_vals, lon_vals, radar_cube, target_grid_cube):
 ##########
 
 
-@graph
-def regridding_arrays():
-    regridded_arrays = {}
-    return regridded_arrays
+@op(required_resource_keys={"regrid"})
+def get_var_names(context):
+    var_names = context.resources.regrid["var_names"]
+    get_dagster_logger().info(var_names)
+    return var_names
+
+
+# def regrid_array(context, key):
+@op(required_resource_keys={"setup", "regrid"})
+def regrid_array(context, key, dates, tgt_grid_cube):
+    rainfall_thresholds = context.resources.setup["rainfall_thresholds"]
+    var_names = context.resources.regrid["var_names"]
+    var_types = context.resources.regrid["var_types"]
+
+    # n_times = 4
+    # tgt_grid_shape = [96, 54]
+    n_times = len(dates)
+    tgt_grid_shape = tgt_grid_cube.shape
+    # Index to find the appropriate variable type for the received variable name key.
+    array_type = var_types[var_names.index(key)]
+    if array_type == "VECTOR":
+        a = np.zeros([n_times, tgt_grid_shape[0], tgt_grid_shape[1], len(rainfall_thresholds)])
+    elif array_type == "MASK_VECTOR":
+        a = np.ones([n_times, tgt_grid_shape[0], tgt_grid_shape[1], len(rainfall_thresholds)])
+    elif array_type == "SCALAR":
+        a = np.zeros([n_times, tgt_grid_shape[0], tgt_grid_shape[1]])
+    elif array_type == "MASK_SCALAR":
+        a = np.ones([n_times, tgt_grid_shape[0], tgt_grid_shape[1]])
+    else:
+        raise ValueError(f"Bad array type {array_type!r}")
+    return a
+
+
+@op(required_resource_keys={"regrid"})
+def gather_regrid_arrays(context, arrays):
+    var_names = context.resources.regrid["var_names"]
+    result = {n: a for n, a in zip(var_names, arrays)}
+    get_dagster_logger().info(f"Regrid arrays: {result}")
+    return result
 
 
 ##########
@@ -203,9 +238,109 @@ def regridding_arrays():
 ##########
 
 
-# @op
-# def regrid():
-#     pass
+@op
+def regrid(
+    context,
+    radar_agg_3hr, tgt_grid_cube,
+    validity_times, regridded_arrays_dict,
+    lon_target_index, lat_target_index
+):
+    rainfall_thresholds = context.resources.setup["rainfall_thresholds"]
+    def compare_time(t1, t2):
+        return (t1.year==t2.year) and (t1.month==t2.month) and (t1.day==t2.day) and (t1.hour==t2.hour) and (t1.minute==t2.minute)
+
+    get_dagster_logger().debug('Performing regrid from radar to target grid.')
+    # Iterate through each time, rain amount band, latitude and longitude
+    for i_time, validity_time in enumerate(validity_times):
+        get_dagster_logger().info(f'Processing radar data for validity time {validity_time}')
+        radar_select_time = radar_agg_3hr.extract(iris.Constraint(
+            time=lambda c1: compare_time(c1.bound[0], validity_time)
+        ))
+        masked_radar = np.ma.MaskedArray(radar_select_time.data.data, radar_agg_3hr[0].data.mask)
+
+        radar_instant_select_time = radar_cube.extract(iris.Constraint(
+            time=lambda c1: compare_time(c1.point, validity_time)
+        ))
+        masked_radar_instant = np.ma.MaskedArray(radar_instant_select_time.data.data, radar_cube[0].data.mask)
+        for i_lat in range(tgt_grid_cube.shape[0]):
+            for i_lon in range(tgt_grid_cube.shape[1]):
+                selected_cells = (
+                    (~(radar_select_time.data.mask)) &
+                    (lat_target_index == i_lat) &
+                    (lon_target_index == i_lon)
+                )
+                masked_radar.mask = ~selected_cells
+                masked_radar_instant.mask = ~selected_cells
+
+                radar_cells_in_mg = np.count_nonzero(selected_cells)
+                # Only proceed with processing for this tagret grid cell
+                # if there are some radar grid cells within this target
+                # grid cell.
+                # get_dagster_logger().debug(f'{i_lat}, {i_lon}')
+                if radar_cells_in_mg > 0:
+                    # set the values for this location to be unmasker,
+                    # as we have valid radar values for this location
+                    regridded_arrays_dict['bands_mask'][i_time, i_lat, i_lon, :] = False
+                    regridded_arrays_dict['scalar_value_mask'][i_time, i_lat, i_lon] = False
+                    for imp_ix, (_, imp_bounds) in enumerate(rainfall_thresholds.items()):
+                        # calculate fraction in band for 3 hour aggregate data
+                        num_in_band_agg = np.count_nonzero(
+                            (masked_radar.compressed() >= imp_bounds[0]) &
+                            (masked_radar.compressed() <= imp_bounds[1])
+                        )
+                        regridded_arrays_dict['radar_fraction_in_band_aggregate_3hr'][
+                            i_time, i_lat, i_lon, imp_ix] = num_in_band_agg / (len(masked_radar.compressed()))
+
+                        # calculate fraction in band for instant radar data
+                        num_in_band_instant = np.count_nonzero(
+                            (masked_radar_instant.compressed() >= imp_bounds[0]) &
+                            (masked_radar_instant.compressed() <= imp_bounds[1])
+                        )
+                        regridded_arrays_dict['radar_fraction_in_band_instant'][i_time, i_lat, i_lon, imp_ix] = \
+                            num_in_band_instant / (len(masked_radar_instant.compressed()))
+
+                    regridded_arrays_dict['fraction_sum_agg'][i_time, i_lat, i_lon] = \
+                        regridded_arrays_dict['radar_fraction_in_band_aggregate_3hr'][i_time, i_lat, i_lon, :].sum()
+                    # get_dagster_logger().debug(f'sum of fractions agg {regridded_arrays_dict["fraction_sum_agg"][i_time, i_lat, i_lon] }')
+                    regridded_arrays_dict['fraction_sum_instant'][i_time, i_lat, i_lon] = \
+                        regridded_arrays_dict['radar_fraction_in_band_instant'][i_time, i_lat, i_lon, :].sum()
+                    # get_dagster_logger().debug(f'sum of fractions instant {regridded_arrays_dict["fraction_sum_instant"][i_time, i_lat, i_lon] }')
+
+                    # calculate the max and average of all radar cells within each mogreps-g cell
+                    regridded_arrays_dict['radar_max_rain_aggregate_3hr'][i_time, i_lat, i_lon] = masked_radar.max()
+                    regridded_arrays_dict['radar_mean_rain_aggregate_3hr'][i_time, i_lat, i_lon] = \
+                        masked_radar.sum() / radar_cells_in_mg
+                    # get_dagster_logger().debug(f'{regridded_arrays_dict["radar_mean_rain_aggregate_3hr"][i_time, i_lat, i_lon]} , {regridded_arrays_dict["radar_max_rain_aggregate_3hr"][i_time, i_lat, i_lon]},' )
+
+                    # create instant radar rate feature data
+                    regridded_arrays_dict['radar_max_rain_instant'][i_time, i_lat, i_lon] = masked_radar_instant.max()
+                    regridded_arrays_dict['radar_mean_rain_instant'][i_time, i_lat, i_lon] = \
+                        masked_radar_instant.sum() / radar_cells_in_mg
+                    # get_dagster_logger().debug(f'{regridded_arrays_dict["radar_mean_rain_instant"][i_time, i_lat, i_lon]} , {regridded_arrays_dict["radar_max_rain_instant"][i_time, i_lat, i_lon]},')
+                else:
+                    get_dagster_logger().info(f'No radar cells to include at ({i_lat}, {i_lon}).')
+
+    total_num_pts = (
+        regridded_arrays_dict['fraction_sum_instant'].shape[0] *
+        regridded_arrays_dict['fraction_sum_instant'].shape[1] *
+        regridded_arrays_dict['fraction_sum_instant'].shape[2]
+    )
+    get_dagster_logger().info(
+        f'Sum of fraction aggregate, number equal to 1: '
+        f'{(regridded_arrays_dict["fraction_sum_agg"] > 0.999).sum()} of {total_num_pts}'
+    )
+    get_dagster_logger().info(
+        f'Sum of fraction instant, number equal to 1: '
+        f'{(regridded_arrays_dict["fraction_sum_instant"] > 0.999).sum()} of {total_num_pts}'
+    )
+    return regridded_arrays_dict
+
+
+##########
+#
+# Regrid post-processing to produce CSV result.
+#
+##########
 
 
 ##########
@@ -225,11 +360,19 @@ def dynamicise(l):
         yield DynamicOutput(l_itm, mapping_key=f"{key}_{i}")
 
 
-@job
+@job(
+    resource_defs={
+        "setup": make_values_resource(rainfall_thresholds=list),
+        "regrid": make_values_resource(
+            var_names=list,
+            var_types=list
+        )
+    }
+)
 def radar_preprocess():
     # Load relevant data (within the required time window).
-    dates = dynamicise(dates_to_extract())
-    datasets = dates.map(load_input_dataset)
+    dates = dates_to_extract()
+    datasets = dynamicise(dates).map(load_input_dataset)
     rcube = radar_cube(datasets.collect())
     tgt_grid_cube = target_grid_cube(locate_target_grid_cube())
 
@@ -238,6 +381,19 @@ def radar_preprocess():
     rcube_latlon = radar_cube_latlon(lat_vals, lon_vals, rcube)
     rcube_agg_3hr = radar_cube_3hr(rcube_latlon)
 
+    # Regrid prep.
     lat_target_index, lon_target_index, num_cells = calc_target_cube_indices(
         lat_vals, lon_vals, rcube_latlon
     )
+    var_names = dynamicise(get_var_names())
+    arrays = var_names.map(lambda k: regrid_array(k, dates, tgt_grid_cube))
+    regrid_arrays_dict = gather_regrid_arrays(arrays.collect())
+
+    # Regrid.
+    regrid_data_dict = regrid(
+        rcube_agg_3hr, tgt_grid_cube,
+        dates, regrid_arrays_dict,
+        lon_target_index, lat_target_index
+    )
+
+    # Regrid post-process.

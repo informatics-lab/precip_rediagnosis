@@ -1,3 +1,35 @@
+resources:
+  setup:
+    config:
+      rainfall_thresholds:
+      - 0.25
+      - 2.5
+      - 7.0
+      - 10.0
+  regrid:
+    config:
+      var_names:
+      - radar_fraction_in_band_aggregate_3hr
+      - radar_fraction_in_band_instant
+      - bands_mask
+      - scalar_value_mask
+      - radar_max_rain_aggregate_3hr
+      - radar_mean_rain_aggregate_3hr
+      - radar_max_rain_instant
+      - radar_mean_rain_instant
+      - fraction_sum_agg
+      - fraction_sum_instant
+      var_types:
+      - VECTOR
+      - VECTOR
+      - MASK_VECTOR
+      - MASK_SCALAR
+      - SCALAR
+      - SCALAR
+      - SCALAR
+      - SCALAR
+      - SCALAR
+      - SCALAR
 ops:
   dates_to_extract:
     config:
@@ -14,3 +46,16 @@ ops:
     config:
       data_path: "/Users/dpeterk/data/PRd"
       filename: ""
+
+
+# {'radar_fraction_in_band_aggregate_3hr': 'VECTOR',
+# 'radar_fraction_in_band_instant': 'VECTOR',
+# 'bands_mask': 'MASK_VECTOR',
+# 'scalar_value_mask': 'MASK_SCALAR',
+# 'radar_max_rain_aggregate_3hr': 'SCALAR',
+# 'radar_mean_rain_aggregate_3hr': 'SCALAR',
+# 'radar_max_rain_instant': 'SCALAR',
+# 'radar_mean_rain_instant': 'SCALAR',
+# 'fraction_sum_agg': 'SCALAR',
+# 'fraction_sum_instant': 'SCALAR',
+# }
