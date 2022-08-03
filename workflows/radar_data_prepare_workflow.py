@@ -1,5 +1,6 @@
-import datetime
 from base64 import b64encode
+import datetime
+import functools
 import os
 from re import sub as resub
 
@@ -12,6 +13,7 @@ import iris
 import iris.coord_categorisation as iccat
 import numpy as np
 import pandas as pd
+import xarray as xr
 
 
 # XXX: should be shared with extract workflow, not duplicated.
@@ -458,6 +460,76 @@ def build_regridded_cubelist(vector_cubes, scalar_cubes):
 
 ##########
 #
+# Convert post-processed data to CSV.
+#
+##########
+
+
+@op
+def cube_to_dataframe(var_name, cubes):
+    cube, = cubes.extract(var_name)
+    return xr.DataArray.from_iris(cube).to_dataframe().reset_index()
+
+
+@op
+def process_scalar_df(scalar_dfs):
+    return functools.reduce(
+        lambda x, y: pd.merge(x, y, on=('latitude', 'longitude', 'time')),
+        scalar_dfs
+    )
+
+
+@op(required_resource_keys={"setup", "regrid"})
+def process_vector_df(context, data_df, vector_dfs):
+    rain_bands = context.resources.setup["rainfall_thresholds"]
+    var_names = context.resources.regrid["var_names"]
+    var_types = context.resources.regrid["var_types"]
+    vector_var_names = [n for (n, t) in zip(var_names, var_types) if t == "VECTOR"]
+    for i, vector_df in enumerate(vector_dfs):
+        var_name = vector_var_names[i]  # Rely on consistent ordering of vector vars.
+        for band in rain_bands:
+            df = vector_df[vector_df['band'] == float(band)][['time', 'latitude', 'longitude', var_name]]
+            df = df.rename({var_name: f'{var_name}_{band}'}, axis='columns')
+            data_df = pd.merge(data_df, df, on=['time', 'latitude', 'longitude'])
+    return data_df
+
+
+@op(required_resource_keys={"regrid"})
+def df_nan_exclude(context, data_df):
+    var_names = context.resources.regrid["var_names"]
+    var_types = context.resources.regrid["var_types"]
+    scalar_selected_var = [n for (n, t) in zip(var_names, var_types) if t == "SCALAR"][0]
+    return data_df[~(data_df[scalar_selected_var].isna())]
+
+
+##########
+#
+# Store cube and CSV results.
+#
+##########
+
+
+# @op
+# def iris_save():
+#     fname_timestamp = self._date_fname_template.format(
+#         start=self._target_time_range[0],
+#         end=self._target_time_range[-1],
+#         )
+#     # Save gridded radar data as a netcdf file
+#     grid_fname = self._opts['radar_fname_prefix'] + '_' + fname_timestamp + self._fname_extension_grid
+#     iris.save(cubelist_to_save, radar_data_dir / grid_fname)
+
+
+# @op
+# def save_csv(context, data_df):
+#     radar_tab_fname = (self._opts['radar_fname_prefix'] + '_' +
+#                         fname_timestamp + self._fname_extension_tabular
+#                         )
+#     data_df.to_csv(radar_data_dir / radar_tab_fname, index=False)
+
+
+##########
+#
 # Job definition and helper functions.
 #
 ##########
@@ -517,7 +589,17 @@ def radar_preprocess():
     regrid_coords = collate_coords(tgt_grid_cube, radar_time_coord, band_coord)
     vector_var_names, scalar_var_names = get_arrays_by_type()
     vector_names = dynamicise(vector_var_names)
-    vector_cubes = vector_names.map(lambda n: build_vector_cubes(n, regrid_data_dict, regrid_coords))
     scalar_names = dynamicise(scalar_var_names)
+    vector_cubes = vector_names.map(lambda n: build_vector_cubes(n, regrid_data_dict, regrid_coords))
     scalar_cubes = scalar_names.map(lambda n: build_scalar_cubes(n, regrid_data_dict, regrid_coords))
     regridded_cubes = build_regridded_cubelist(vector_cubes.collect(), scalar_cubes.collect())
+
+    # Convert post-processed data to CSV.
+    vector_dfs = vector_names.map(lambda n: cube_to_dataframe(n, regridded_cubes)).collect()
+    scalar_dfs = scalar_names.map(lambda n: cube_to_dataframe(n, regridded_cubes)).collect()
+    # Avoid re-defining `radar_df` with each op call.
+    radar_df = df_nan_exclude(process_vector_df(process_scalar_df(scalar_dfs), vector_dfs))
+
+    # Store results.
+    # iris_save(regridded_cubes)
+    # save_csv(radar_df)
