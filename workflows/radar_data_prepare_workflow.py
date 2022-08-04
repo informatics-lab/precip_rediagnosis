@@ -58,6 +58,7 @@ def dates_to_extract(context):
 
 @op(required_resource_keys={"setup"})
 def load_input_dataset(context, date):
+    """Load a radar data file for a single time point."""
     filepath = context.resources.setup["data_path"]
     filename = context.op_config["dataset_filename_template"].format(
         product=context.op_config["product"],
@@ -68,28 +69,32 @@ def load_input_dataset(context, date):
 
 @op
 def iris_concatenate(cubes):
+    """Concatenate a list of Iris cubes to a single resultant cube."""
     return CubeList(cubes).concatenate_cube()
 
 
 
 @asset
 def radar_cube(cubes):
+    """Concatenated radar data cube - the workflow's data input."""
     return iris_concatenate(cubes)
 
 
 @asset
 def radar_cube_latlon(lat_vals, lon_vals, radar_cube):
+    """Radar cube with latitude and longitude coords added."""
     return add_latlon_coords(lat_vals, lon_vals, radar_cube)
 
 
 @asset
 def radar_cube_3hr(radar_cube):
+    """Aggregate radar data into three-hour windows."""
     # radar_agg_3hr = radar_cube.copy()
     iccat.add_hour(radar_cube, coord='time')
     iccat.add_day_of_year(radar_cube, coord='time')
     iccat.add_categorised_coord(radar_cube, "3hr", "hour", lambda _, value: value // 3)
     radar_agg_3hr = radar_cube.aggregated_by(['3hr', 'day_of_year'], iris.analysis.SUM)
-    radar_agg_3hr.data = radar_agg_3hr.data * (1.0 / 12.0)  # Very memory-intensive!
+    radar_agg_3hr.data = radar_agg_3hr.data * (1.0 / 12.0)
     for coord_name in ['forecast_reference_time', 'hour', 'day_of_year', '3hr']:
         radar_agg_3hr.remove_coord(coord_name)
     return radar_agg_3hr
@@ -100,6 +105,7 @@ def radar_cube_3hr(radar_cube):
     out={"filepath": Out(), "std_name": Out()}
 )
 def locate_target_grid_cube(context):
+    """Inject filepath and standard name of grid cube to load into the workflow."""
     filepath = context.resources.setup["data_path"]
     filename = context.op_config["filename"]
     standard_name = context.op_config["phenomenon"]
@@ -108,6 +114,7 @@ def locate_target_grid_cube(context):
 
 @asset
 def target_grid_cube(full_filepath, standard_name):
+    """Define the grid cube as a workflow asset."""
     return iris.load_cube(full_filepath, standard_name)
 
 
@@ -120,7 +127,7 @@ def target_grid_cube(full_filepath, standard_name):
 
 @op(out={"lat_vals": Out(), "lon_vals": Out()})
 def calc_lat_lon_coords(radar_cube, target_grid_cube):
-    get_dagster_logger().info('Calculating index mapping for target grid')
+    """Define latitude and longitude coord values for the radar cube."""
     radar_crs = radar_cube.coord_system().as_cartopy_crs()
     # Create some helper arrays for converting from our radar grid to the mogreps-g grid
     X_radar, Y_radar = np.meshgrid(
@@ -140,6 +147,7 @@ def calc_lat_lon_coords(radar_cube, target_grid_cube):
 
 @op
 def add_latlon_coords(lat_vals, lon_vals, cube):
+    """Add auxiliary latitude and longitude coords to the radar cube."""
     lon_coord = iris.coords.AuxCoord(
         lon_vals,
         standard_name='longitude',
@@ -234,14 +242,14 @@ def calc_target_cube_indices(lat_vals, lon_vals, radar_cube, target_grid_cube):
 
 @op(required_resource_keys={"regrid"})
 def get_var_names(context):
-    var_names = context.resources.regrid["var_names"]
-    get_dagster_logger().info(var_names)
-    return var_names
+    """Inject var names from config into the workflow."""
+    return context.resources.regrid["var_names"]
 
 
 # def regrid_array(context, key):
 @op(required_resource_keys={"setup", "regrid"})
 def regrid_array(context, key, dates, tgt_grid_cube):
+    """Construct a regrid array appropriate for the array type."""
     rainfall_thresholds = context.resources.setup["rainfall_thresholds"]
     var_names = context.resources.regrid["var_names"]
     var_types = context.resources.regrid["var_types"]
@@ -266,6 +274,7 @@ def regrid_array(context, key, dates, tgt_grid_cube):
 
 @op(required_resource_keys={"regrid"})
 def gather_regrid_arrays(context, arrays):
+    """Combine each individual array of regridded data into a single dict."""
     var_names = context.resources.regrid["var_names"]
     result = {n: a for n, a in zip(var_names, arrays)}
     get_dagster_logger().info(f"Regrid arrays: {result}")
@@ -286,6 +295,7 @@ def regrid(
     validity_times, regridded_arrays_dict,
     lon_target_index, lat_target_index
 ):
+    """Regrid the radar data onto the MOGREPs-G grid."""
     rainfall_thresholds = context.resources.setup["rainfall_thresholds"]
     def compare_time(t1, t2):
         return (t1.year==t2.year) and (t1.month==t2.month) and (t1.day==t2.day) and (t1.hour==t2.hour) and (t1.minute==t2.minute)
@@ -388,6 +398,7 @@ def regrid(
     out={"band_coord": Out(), "radar_time_coord": Out()}
 )
 def build_extra_coords(context, validity_times, radar_cube):
+    """Define extra coordinates for the cubes of regridded data."""
     rainfall_thresholds = context.resources.setup["rainfall_thresholds"]
     band_coord = iris.coords.AuxCoord(
         [float(t) for t in rainfall_thresholds.keys()],
@@ -432,6 +443,7 @@ def collate_coords(target_grid_cube, radar_time_coord, band_coord):
     out={"vector_var_names": Out(), "scalar_var_names": Out()}
 )
 def get_arrays_by_type(context):
+    """Sort array names by whether they describe scalar or vector data."""
     var_names = context.resources.regrid["var_names"]
     var_types = context.resources.regrid["var_types"]
     target_var_types = ["VECTOR", "SCALAR"]
@@ -443,6 +455,7 @@ def get_arrays_by_type(context):
 
 @op(required_resource_keys={"regrid"})
 def build_vector_cubes(context, var_name, regridded_arrays_dict, coords):
+    """Construct Iris cubes of vector regridded data arrays."""
     var_names = context.resources.regrid["var_names"]
     long_names = context.resources.regrid["output_long_names"]
     long_name = long_names[var_names.index(var_name)]
@@ -470,6 +483,7 @@ def build_vector_cubes(context, var_name, regridded_arrays_dict, coords):
 
 @op(required_resource_keys={"regrid"})
 def build_scalar_cubes(context, var_name, regridded_arrays_dict, coords):
+    """Construct Iris cubes of scalar regridded data arrays."""
     var_names = context.resources.regrid["var_names"]
     long_names = context.resources.regrid["output_long_names"]
     long_name = long_names[var_names.index(var_name)]
@@ -517,6 +531,7 @@ def cube_to_dataframe(var_name, cubes):
 
 @op
 def process_scalar_df(scalar_dfs):
+    """Produce the dataframe of scalar data values."""
     return functools.reduce(
         lambda x, y: pd.merge(x, y, on=('latitude', 'longitude', 'time')),
         scalar_dfs
@@ -525,13 +540,14 @@ def process_scalar_df(scalar_dfs):
 
 @op(required_resource_keys={"setup", "regrid"})
 def process_vector_df(context, data_df, vector_dfs):
+    """Combine scalar and vector dataframes."""
     rain_bands = context.resources.setup["rainfall_thresholds"]
     var_names = context.resources.regrid["var_names"]
     var_types = context.resources.regrid["var_types"]
     vector_var_names = [n for (n, t) in zip(var_names, var_types) if t == "VECTOR"]
     for i, vector_df in enumerate(vector_dfs):
         var_name = vector_var_names[i]  # Rely on consistent ordering of vector vars.
-        for band in rain_bands:
+        for band in rain_bands.keys():
             df = vector_df[vector_df['band'] == float(band)][['time', 'latitude', 'longitude', var_name]]
             df = df.rename({var_name: f'{var_name}_{band}'}, axis='columns')
             data_df = pd.merge(data_df, df, on=['time', 'latitude', 'longitude'])
@@ -540,6 +556,7 @@ def process_vector_df(context, data_df, vector_dfs):
 
 @op(required_resource_keys={"regrid"})
 def df_nan_exclude(context, data_df):
+    """Exclude NaN values from the resultant dataframe."""
     var_names = context.resources.regrid["var_names"]
     var_types = context.resources.regrid["var_types"]
     scalar_selected_var = [n for (n, t) in zip(var_names, var_types) if t == "SCALAR"][0]
@@ -610,6 +627,7 @@ def dynamicise(l):
     }
 )
 def radar_preprocess():
+    """Define the workflow used to process radar data."""
     # Load relevant data (within the required time window).
     dates = dates_to_extract()
     datasets = dynamicise(dates).map(load_input_dataset)
