@@ -11,6 +11,7 @@ from dagster import (
 )
 import iris
 import iris.coord_categorisation as iccat
+from iris.cube import Cube, CubeList
 import numpy as np
 import pandas as pd
 import xarray as xr
@@ -67,7 +68,7 @@ def load_input_dataset(context, date):
 
 @op
 def iris_concatenate(cubes):
-    return iris.cube.CubeList(cubes).concatenate_cube()
+    return CubeList(cubes).concatenate_cube()
 
 
 
@@ -94,16 +95,20 @@ def radar_cube_3hr(radar_cube):
     return radar_agg_3hr
 
 
-@op(required_resource_keys={"setup"})
+@op(
+    required_resource_keys={"setup"},
+    out={"filepath": Out(), "std_name": Out()}
+)
 def locate_target_grid_cube(context):
     filepath = context.resources.setup["data_path"]
-    filename = context.op_config["dataset_filename_template"]
-    return os.path.join(filepath, filename)
+    filename = context.op_config["filename"]
+    standard_name = context.op_config["phenomenon"]
+    return (os.path.join(filepath, filename), standard_name)
 
 
 @asset
-def target_grid_cube(full_filepath):
-    return iris.load_cube(full_filepath)
+def target_grid_cube(full_filepath, standard_name):
+    return iris.load_cube(full_filepath, standard_name)
 
 
 ##########
@@ -150,7 +155,42 @@ def add_latlon_coords(lat_vals, lon_vals, cube):
     return cube
 
 
-@op(out={"lat_target_index": Out(), "lon_target_index": Out(), "num_cells": Out()})
+# @op(out={"lat_target_index": Out(), "lon_target_index": Out(), "num_cells": Out()})
+# def calc_target_cube_indices(lat_vals, lon_vals, radar_cube, target_grid_cube):
+#     """
+#     Calculate the latitude and longitude index in the target cube
+#     coordinate system of each grid square in the radar cube.
+#     :param lat_vals: A 1D array of the target latitude values
+#     :param lon_vals: A 1D array of the target longitude values
+#     :param radar_cube: The source radar cube for the calculating the mapping
+#     :return: 2D np arrays with a mapping for each cell in the radar
+#     cube to the index in latitude and longitude of the target cube.
+#     """
+#     lat_target_index = -1 * np.ones(
+#         (radar_cube.shape[1], radar_cube.shape[2]),
+#         dtype='int32',
+#     )
+#     lon_target_index = -1 * np.ones(
+#         (radar_cube.shape[1], radar_cube.shape[2]),
+#         dtype='int32',
+#     )
+
+#     num_cells = np.zeros((target_grid_cube.shape[0], target_grid_cube.shape[1]))
+#     for i_lon, bnd_lon in enumerate(target_grid_cube.coord('longitude').bounds):
+#         for i_lat, bnd_lat in enumerate(target_grid_cube.coord('latitude').bounds):
+#             arr1, arr2 = np.where(
+#                 (lat_vals >= bnd_lat[0]) &
+#                 (lat_vals < bnd_lat[1]) &
+#                 (lon_vals >= bnd_lon[0]) &
+#                 (lon_vals < bnd_lon[1])
+#             )
+#             lon_target_index[arr1, arr2] = i_lon
+#             lat_target_index[arr1, arr2] = i_lat
+#             num_cells[i_lat, i_lon] = len(arr1)
+#     return lat_target_index, lon_target_index, num_cells
+
+
+@op(out={"lat_target_index": Out(), "lon_target_index": Out()})
 def calc_target_cube_indices(lat_vals, lon_vals, radar_cube, target_grid_cube):
     """
     Calculate the latitude and longitude index in the target cube
@@ -170,7 +210,7 @@ def calc_target_cube_indices(lat_vals, lon_vals, radar_cube, target_grid_cube):
         dtype='int32',
     )
 
-    num_cells = np.zeros((target_grid_cube.shape[0], target_grid_cube.shape[1]))
+    # num_cells = np.zeros((target_grid_cube.shape[0], target_grid_cube.shape[1]))
     for i_lon, bnd_lon in enumerate(target_grid_cube.coord('longitude').bounds):
         for i_lat, bnd_lat in enumerate(target_grid_cube.coord('latitude').bounds):
             arr1, arr2 = np.where(
@@ -181,8 +221,8 @@ def calc_target_cube_indices(lat_vals, lon_vals, radar_cube, target_grid_cube):
             )
             lon_target_index[arr1, arr2] = i_lon
             lat_target_index[arr1, arr2] = i_lat
-            num_cells[i_lat, i_lon] = len(arr1)
-    return lat_target_index, lon_target_index, num_cells
+            # num_cells[i_lat, i_lon] = len(arr1)
+    return lat_target_index, lon_target_index
 
 
 ##########
@@ -206,20 +246,19 @@ def regrid_array(context, key, dates, tgt_grid_cube):
     var_names = context.resources.regrid["var_names"]
     var_types = context.resources.regrid["var_types"]
 
-    # n_times = 4
-    # tgt_grid_shape = [96, 54]
     n_times = len(dates)
-    tgt_grid_shape = tgt_grid_cube.shape
+    tgt_lat_shape, = tgt_grid_cube.coord("latitude").shape
+    tgt_lon_shape, = tgt_grid_cube.coord("longitude").shape
     # Index to find the appropriate variable type for the received variable name key.
     array_type = var_types[var_names.index(key)]
     if array_type == "VECTOR":
-        a = np.zeros([n_times, tgt_grid_shape[0], tgt_grid_shape[1], len(rainfall_thresholds)])
+        a = np.zeros([n_times, tgt_lat_shape, tgt_lon_shape, len(rainfall_thresholds)])
     elif array_type == "MASK_VECTOR":
-        a = np.ones([n_times, tgt_grid_shape[0], tgt_grid_shape[1], len(rainfall_thresholds)])
+        a = np.ones([n_times, tgt_lat_shape, tgt_lon_shape, len(rainfall_thresholds)])
     elif array_type == "SCALAR":
-        a = np.zeros([n_times, tgt_grid_shape[0], tgt_grid_shape[1]])
+        a = np.zeros([n_times, tgt_lat_shape, tgt_lon_shape])
     elif array_type == "MASK_SCALAR":
-        a = np.ones([n_times, tgt_grid_shape[0], tgt_grid_shape[1]])
+        a = np.ones([n_times, tgt_lat_shape, tgt_lon_shape])
     else:
         raise ValueError(f"Bad array type {array_type!r}")
     return a
@@ -243,7 +282,7 @@ def gather_regrid_arrays(context, arrays):
 @op(required_resource_keys={"setup"})
 def regrid(
     context,
-    radar_agg_3hr, tgt_grid_cube,
+    radar_cube, radar_agg_3hr, tgt_grid_cube,
     validity_times, regridded_arrays_dict,
     lon_target_index, lat_target_index
 ):
@@ -348,9 +387,9 @@ def regrid(
     required_resource_keys={"setup"},
     out={"band_coord": Out(), "radar_time_coord": Out()}
 )
-def build_extra_coords(context, validity_times):
+def build_extra_coords(context, validity_times, radar_cube):
     rainfall_thresholds = context.resources.setup["rainfall_thresholds"]
-    band_coord = iris.coords.DimCoord(
+    band_coord = iris.coords.AuxCoord(
         [float(t) for t in rainfall_thresholds.keys()],
         bounds=list(rainfall_thresholds.values()),
         var_name='band',
@@ -417,11 +456,12 @@ def build_vector_cubes(context, var_name, regridded_arrays_dict, coords):
         (radar_time_coord, 0),
         (target_lat_coord, 1),
         (target_lon_coord, 2),
-        (band_coord, 3)
     )
-    return iris.cube.Cube(
+    acad = [(band_coord, 3)]
+    return Cube(
         data=data,
         dim_coords_and_dims=dcad,
+        aux_coords_and_dims=acad,
         units=None,
         var_name=var_name,
         long_name=long_name
@@ -439,12 +479,13 @@ def build_scalar_cubes(context, var_name, regridded_arrays_dict, coords):
         mask=regridded_arrays_dict['scalar_value_mask'],
     )
     radar_time_coord, target_lat_coord, target_lon_coord, _ = coords
+    # cl = {c.name(): len(c.points) for c in coords[:-1]}
     dcad = (
         (radar_time_coord, 0),
         (target_lat_coord, 1),
         (target_lon_coord, 2)
     )
-    return iris.cube.Cube(
+    return Cube(
         data=data,
         dim_coords_and_dims=dcad,
         units='mm',
@@ -455,7 +496,9 @@ def build_scalar_cubes(context, var_name, regridded_arrays_dict, coords):
 
 @op
 def build_regridded_cubelist(vector_cubes, scalar_cubes):
-    return iris.cube.CubeList(vector_cubes.extend(scalar_cubes))
+    """Build a `CubeList` of the vector and scalar datasets."""
+    scalar_cubes.extend(vector_cubes)
+    return CubeList(scalar_cubes)
 
 
 ##########
@@ -467,6 +510,7 @@ def build_regridded_cubelist(vector_cubes, scalar_cubes):
 
 @op
 def cube_to_dataframe(var_name, cubes):
+    """Convert an Iris cube to a pandas DataFrame using XArray."""
     cube, = cubes.extract(var_name)
     return xr.DataArray.from_iris(cube).to_dataframe().reset_index()
 
@@ -555,6 +599,7 @@ def dynamicise(l):
     resource_defs={
         "setup": make_values_resource(
             data_path=str,
+            radar_fname_prefix=str,
             rainfall_thresholds=dict,
         ),
         "regrid": make_values_resource(
@@ -569,7 +614,8 @@ def radar_preprocess():
     dates = dates_to_extract()
     datasets = dynamicise(dates).map(load_input_dataset)
     rcube = radar_cube(datasets.collect())
-    tgt_grid_cube = target_grid_cube(locate_target_grid_cube())
+    # tgt_grid_cube = target_grid_cube(locate_target_grid_cube())
+    tgt_grid_cube = target_grid_cube(*locate_target_grid_cube())
 
     # Add required extra metadata.
     lat_vals, lon_vals = calc_lat_lon_coords(rcube, tgt_grid_cube)
@@ -577,8 +623,8 @@ def radar_preprocess():
     rcube_agg_3hr = radar_cube_3hr(rcube_latlon)
 
     # Regrid prep.
-    lat_target_index, lon_target_index, num_cells = calc_target_cube_indices(
-        lat_vals, lon_vals, rcube_latlon
+    lat_target_index, lon_target_index = calc_target_cube_indices(
+        lat_vals, lon_vals, rcube_latlon, tgt_grid_cube
     )
     var_names = dynamicise(get_var_names())
     arrays = var_names.map(lambda k: regrid_array(k, dates, tgt_grid_cube))
@@ -586,13 +632,13 @@ def radar_preprocess():
 
     # Regrid.
     regrid_data_dict = regrid(
-        rcube_agg_3hr, tgt_grid_cube,
+        rcube_latlon, rcube_agg_3hr, tgt_grid_cube,
         dates, regrid_arrays_dict,
         lon_target_index, lat_target_index
     )
 
     # Regrid post-processing.
-    band_coord, radar_time_coord = build_extra_coords(dates)
+    band_coord, radar_time_coord = build_extra_coords(dates, rcube_latlon)
     # XXX Output not used elsewhere in workflow? Can remove `num_cells` too if not used.
     # num_cells_cube = build_num_cells_cube(num_cells, lat_target_index, lon_target_index)
     regrid_coords = collate_coords(tgt_grid_cube, radar_time_coord, band_coord)

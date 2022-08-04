@@ -41,16 +41,16 @@ resources:
       - SCALAR
       - SCALAR
       output_long_names:
-      - 'Fraction radar rainfall cells in specified 3hr aggregate rain band '
+      - 'Fraction radar rainfall cells in specified 3hr aggregate rain band'
       - 'Fraction radar rainfall cells in specified instant rain band'
       - 'none'
       - 'none'
-      - 'maximum rain in radar cells within mogreps-g cell',
-      - 'average rain in radar cells within mogreps-g cell',
-      - 'maximum rain in radar cells within mogreps-g cell',
-      - 'average rain in radar cells within mogreps-g cell',
-      - 'Sum of fractions for each cell for aggregate 3hr data',
-      - 'Sum of fractions for each cell for instant precip data',
+      - 'maximum rain in radar cells within mogreps-g cell'
+      - 'average rain in radar cells within mogreps-g cell'
+      - 'maximum rain in radar cells within mogreps-g cell'
+      - 'average rain in radar cells within mogreps-g cell'
+      - 'Sum of fractions for each cell for aggregate 3hr data'
+      - 'Sum of fractions for each cell for instant precip data'
 ops:
   dates_to_extract:
     config:
@@ -65,6 +65,7 @@ ops:
   locate_target_grid_cube:
     config:
       filename: "prd_mogreps_g_015H_20200215T0300Z_20200217T0900Z.nc"
+      phenomenon: "air_temperature"
   filename_timestamp:
     config:
       date_fname_template: "{start.year:04d}{start.month:02d}{start.day:02d}T{start.hour:02d}{start.minute:02d}Z_{end.year:04d}{end.month:02d}{end.day:02d}T{end.hour:02d}{end.minute:02d}Z"
