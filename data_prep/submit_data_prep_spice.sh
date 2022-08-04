@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
-export PRD_TIMESTAMP=$(date +%Y%M%dT%H%m)
+export PRD_TIMESTAMP=$(date +%Y%m%dT%H%M)
+echo job timestamp ${PRD_TIMESTAMP}
 
 export EVENT_NAME=${1}
 echo processing event ${EVENT_NAME}
