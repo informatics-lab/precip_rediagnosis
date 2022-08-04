@@ -555,7 +555,7 @@ def dynamicise(l):
     resource_defs={
         "setup": make_values_resource(
             data_path=str,
-            rainfall_thresholds=list,
+            rainfall_thresholds=dict,
         ),
         "regrid": make_values_resource(
             var_names=list,
