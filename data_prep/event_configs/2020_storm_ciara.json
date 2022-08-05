@@ -11,7 +11,8 @@
   "fname_extension_grid": ".nc",
   "fname_extension_tabular": ".csv",
   "merge_vars": [ "latitude", "longitude", "time"],
-  "merged_outpout_prefix": "prd_merged",
+  "merged_output_prefix": "prd_merged",
+  "timezone": "UTC",
   "data_sources": [
  {
           "data_type": "model_ensemble",

@@ -13,13 +13,15 @@ import iris
 import iris.cube
 import iris.quickplot
 import iris.coord_categorisation
+# import cf_units
 
-def calc_dates_list(start_datetime, end_datetime, delta_hours):
+def calc_dates_list(start_datetime, end_datetime, delta_hours, tz_str='UTC'):
     dates_to_extract = list(pandas.date_range(
         start=start_datetime,
-        end=end_datetime - datetime.timedelta(seconds=1),
-        freq=datetime.timedelta(
-            hours=delta_hours)).to_pydatetime())
+        end=end_datetime,
+        freq=datetime.timedelta(hours=delta_hours),
+        tz=tz_str,
+    ).to_pydatetime())
     return dates_to_extract
 
 
@@ -119,6 +121,7 @@ class MassExtractor():
         self._output_level = opts_dict['output_level']
         self._merge_data = None
         self._event_name =  opts_dict['event_name']
+        self._timezone = opts_dict['timezone']
 
         self._create_logger()
 
@@ -126,10 +129,12 @@ class MassExtractor():
         # that we are interested in. When dealing with forecast data, the
         # forecast reference time will be these values (validity times), minus
         # the lead time for the particular forecast being processed.
-        self._target_time_range = calc_dates_list(self._date_range[0],
-                                                  self._date_range[1],
-                                                  self._target_time_delta,
-                                                  )
+        self._target_time_range = calc_dates_list(
+            start_datetime=self._date_range[0],
+            end_datetime=self._date_range[1],
+            delta_hours=self._target_time_delta,
+            tz_str=self._timezone,
+        )
 
     def _create_logger(self):
         self.logger = get_logger(self._log_dir,
@@ -293,7 +298,6 @@ class ModelStageExtractor(MassExtractor):
 
             mogreps_g_single_ts_uk_df = single_level_df.merge(height_levels_df,
                                                               on=merge_coords)
-            mogreps_g_single_ts_uk_df
 
             mogreps_g_single_ts_uk_df = single_level_df.merge(height_levels_df,
                                                               on=merge_coords)
@@ -525,6 +529,7 @@ class RadarExtractor(MassExtractor):
         validity_times = calc_dates_list(self._date_range[0],
                                          self._date_range[1],
                                          self._target_time_delta,
+                                         self._timezone,
                                          )
         rainfall_thresholds = self._opts['rainfall_thresholds']
 
@@ -720,6 +725,19 @@ class RadarExtractor(MassExtractor):
             units=radar_cube.coord('time').units,
         )
 
+        # radar_time_coord = iris.coords.DimCoord(
+        #     [cf_units.encode_time(year=vt.year,
+        #                           month=vt.month,
+        #                           day=vt.day,
+        #                           hour=vt.hour,
+        #                           minute=vt.minute,
+        #                           second=0,
+        #                           ) for vt in validity_times],
+        #     var_name='time',
+        #     units=radar_cube.coord('time').units,
+        # )
+
+
         radar_regrided_cubes = {}
 
 
@@ -737,7 +755,7 @@ class RadarExtractor(MassExtractor):
                 long_name=out_vars_long_names[var_name],
             )
 
-        num_cells_cube = iris.cube.Cube(
+        radar_regrided_cubes['num_cells_cube'] = iris.cube.Cube(
             data=num_cells,
             dim_coords_and_dims=(
              (target_lat_coord, 0), (target_lon_coord, 1),),

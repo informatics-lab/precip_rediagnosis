@@ -89,6 +89,7 @@ def main():
         'fname_extension_tabular': dataset_config['fname_extension_tabular'],
         'output_level': cmd_args.output_level,
         'event_name': event_name,
+        'timezone': dataset_config['timezone'],
     }
     driver_list = []
 
@@ -115,7 +116,7 @@ def main():
         start_dt = min(merged_df['time'])
         end_dt = max(merged_df['time'])
         fname_timestamp = dataset_config['date_fname_template'].format(start=start_dt, end=end_dt)
-        merged_fname = dataset_config['merged_outpout_prefix'] + '_' + fname_timestamp + dataset_config['fname_extension_tabular']
+        merged_fname = dataset_config['merged_output_prefix'] + '_' + fname_timestamp + dataset_config['fname_extension_tabular']
         merged_output_path = dest_dir / merged_fname
         logger1.info(f'writing merged dataframe to {merged_output_path}')
         merged_df.to_csv(merged_output_path, index=False)
