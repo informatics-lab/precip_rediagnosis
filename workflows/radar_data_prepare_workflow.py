@@ -89,7 +89,6 @@ def radar_cube_latlon(lat_vals, lon_vals, radar_cube):
 @asset
 def radar_cube_3hr(radar_cube):
     """Aggregate radar data into three-hour windows."""
-    # radar_agg_3hr = radar_cube.copy()
     iccat.add_hour(radar_cube, coord='time')
     iccat.add_day_of_year(radar_cube, coord='time')
     iccat.add_categorised_coord(radar_cube, "3hr", "hour", lambda _, value: value // 3)
@@ -100,22 +99,18 @@ def radar_cube_3hr(radar_cube):
     return radar_agg_3hr
 
 
-@op(
-    required_resource_keys={"setup"},
-    out={"filepath": Out(), "std_name": Out()}
-)
+@op(required_resource_keys={"setup"})
 def locate_target_grid_cube(context):
     """Inject filepath and standard name of grid cube to load into the workflow."""
     filepath = context.resources.setup["data_path"]
     filename = context.op_config["filename"]
-    standard_name = context.op_config["phenomenon"]
-    return (os.path.join(filepath, filename), standard_name)
+    return os.path.join(filepath, filename)
 
 
 @asset
-def target_grid_cube(full_filepath, standard_name):
+def target_grid_cube(full_filepath):
     """Define the grid cube as a workflow asset."""
-    return iris.load_cube(full_filepath, standard_name)
+    return iris.load_cube(full_filepath)
 
 
 ##########
@@ -222,10 +217,8 @@ def calc_target_cube_indices(lat_vals, lon_vals, radar_cube, target_grid_cube):
     for i_lon, bnd_lon in enumerate(target_grid_cube.coord('longitude').bounds):
         for i_lat, bnd_lat in enumerate(target_grid_cube.coord('latitude').bounds):
             arr1, arr2 = np.where(
-                (lat_vals >= bnd_lat[0]) &
-                (lat_vals < bnd_lat[1]) &
-                (lon_vals >= bnd_lon[0]) &
-                (lon_vals < bnd_lon[1])
+                (lat_vals >= bnd_lat[0]) & (lat_vals < bnd_lat[1]) &
+                (lon_vals >= bnd_lon[0]) & (lon_vals < bnd_lon[1])
             )
             lon_target_index[arr1, arr2] = i_lon
             lat_target_index[arr1, arr2] = i_lat
@@ -312,7 +305,10 @@ def regrid(
         radar_instant_select_time = radar_cube.extract(iris.Constraint(
             time=lambda c1: compare_time(c1.point, validity_time)
         ))
-        masked_radar_instant = np.ma.MaskedArray(radar_instant_select_time.data.data, radar_cube[0].data.mask)
+        masked_radar_instant = np.ma.MaskedArray(
+            radar_instant_select_time.data.data,
+            radar_cube[0].data.mask
+        )
         for i_lat in range(tgt_grid_cube.shape[0]):
             for i_lon in range(tgt_grid_cube.shape[1]):
                 selected_cells = (
@@ -632,8 +628,7 @@ def radar_preprocess():
     dates = dates_to_extract()
     datasets = dynamicise(dates).map(load_input_dataset)
     rcube = radar_cube(datasets.collect())
-    # tgt_grid_cube = target_grid_cube(locate_target_grid_cube())
-    tgt_grid_cube = target_grid_cube(*locate_target_grid_cube())
+    tgt_grid_cube = target_grid_cube(locate_target_grid_cube())
 
     # Add required extra metadata.
     lat_vals, lon_vals = calc_lat_lon_coords(rcube, tgt_grid_cube)
