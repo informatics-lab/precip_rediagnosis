@@ -1,4 +1,4 @@
-# Setting uyp environments for precip rediagnosis scipts/notebooks
+# Setting up environments for precip rediagnosis scipts/notebooks
 
 The environments for running precip rediagnosis code, either in scripts or in notebooks, depending on the platform and type of work you are doing, are all primarily provided by conda environments.
 
