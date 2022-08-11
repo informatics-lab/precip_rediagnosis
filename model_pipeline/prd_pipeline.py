@@ -212,7 +212,7 @@ def preprocess_data(input_data, feature_dict, test_fraction=0.2):
     """
 
     # drop NaN values in the dataset
-    data = input_data.dropna()
+    data = input_data.dropna(axis=1)
     
     print(f"target has dims: {len(feature_dict['target'])}")
     if isinstance(feature_dict['target'], list):
