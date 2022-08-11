@@ -1,0 +1,14 @@
+name: prd_dagster_data_prep
+channels:
+  - conda-forge
+dependencies:
+  - python=3.8
+  - jupyterlab
+  - dask-labextension
+  - pandas=1.4
+  - xarray=2022.6
+  - iris=3.2
+  - cartopy=0.20
+  - dask
+  - dagster=1.0
+  - dagit
