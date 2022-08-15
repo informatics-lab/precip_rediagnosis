@@ -153,7 +153,7 @@ def random_time_space_sample(df, test_fraction, random_state, sampling_columns):
     return train_df, test_df
 
 
-def sample_data(df, test_fraction=0.2, test_save=None, random_state=None):
+def sample_data_by_time(df, test_fraction=0.2, test_save=None, random_state=None):
     """
     Sample test and train datasets by selecting the last 20% of timesteps in the data for testing
     """
@@ -164,27 +164,7 @@ def sample_data(df, test_fraction=0.2, test_save=None, random_state=None):
     train_df = df[~test_mask]
 
     return train_df, test_df
-
-
-
-    # if test_save:
-    #     # container = test_save['datastore_credentials']['container']
-    #     # acc_name = test_save['datastore_credentials']['storage_acc_name']
-    #     # acc_key = test_save['datastore_credentials']['storage_acc_key']
-    #     # # save test dataset
-    #     # fsspec_handle = fsspec.open(
-    #     #     f'abfs://{container}/{test_save["filename"]}_test.csv', account_name=acc_name, account_key=acc_key, mode='wt')
-    #     # with fsspec_handle.open() as testfn:
-    #     #     test_df.to_csv(testfn)
-    #     # # save train dataset
-    #     # fsspec_handle = fsspec.open(f'abfs://{container}/{test_save["filename"]}_train.csv', account_name=acc_name, account_key=acc_key, mode='wt')
-    #     # with fsspec_handle.open() as trainfn:
-    #     #     train_df.to_csv(trainfn)
-    #     test_df.to_csv('test_dataset.csv', index=False)
-    #     train_df.to_csv('train_dataset.csv', index=False)
-    # else: 
-    #     return train_df, test_df
-    
+   
 
 def reshape_profile_features(df, features, data_dims_dict):
     """
@@ -284,8 +264,6 @@ def preprocess_data(input_data, feature_dict, test_fraction=0.2):
     random_state = np.random.RandomState()  # TO DO: how to log this in experiments!
     
     # Extract and return train and validate datasets
-    # train_df, test_df = sample_data(data, test_fraction=test_fraction, random_state=random_state)
-    # train_df, val_df = sample_data(data, test_fraction=test_fraction, random_state=random_state)
     train_df, val_df = random_time_space_sample(
         data,
         test_fraction=test_fraction,
