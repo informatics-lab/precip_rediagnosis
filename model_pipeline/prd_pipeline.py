@@ -26,7 +26,7 @@ import fsspec
 import pickle
 
 
-def build_model(nprof_features, nheights, nsinglvl_features):
+def build_model(nprof_features, nheights, nsinglvl_features, nbands):
     """
     This 1D convoluational neural network take a regression approach to predict 
     precipitation on a column-wise basis. This model takes vertical profile features 
@@ -59,11 +59,11 @@ def build_model(nprof_features, nheights, nsinglvl_features):
         x = Dense(1024, use_bias=False, activation='relu')(x)
         x = Dense(1024, use_bias=False, activation='relu')(x)
         
-        main_output = Dense(1, use_bias=True, activation='linear', name='main_output')(x)
+        main_output = Dense(nbands, use_bias=True, activation='softmax', name='main_output')(x)
         model = Model(inputs=[profile_input, surf_input], outputs=[main_output])
-    
+
     else:
-        main_output = Dense(1, use_bias=True, activation='linear', name='main_output')(out)
+        main_output = Dense(nbands, activation='softmax', name='main_output')(out) # use_bias=True, 
         model = Model(inputs=[profile_input], outputs=[main_output])
         
     return model
@@ -75,7 +75,7 @@ def train_model(model, data_splits, hyperparameter_dict):
     Hyperparameters use when fitting the model are defined in hyperparameter_dict.
     """
     optimizer = tf.keras.optimizers.Adam(learning_rate=hyperparameter_dict['learning_rate'])
-    model.compile(loss='mean_absolute_error', optimizer=optimizer)
+    model.compile(loss=hyperparameter_dict['loss_function'], optimizer=optimizer)
 
     history = model.fit(data_splits['X_train'], 
                         data_splits['y_train'], 
@@ -92,36 +92,6 @@ def load_data(current_ws, dataset_name):
     dataset = azureml.core.Dataset.get_by_name(current_ws, name=dataset_name)
     input_data = dataset.to_pandas_dataframe()    
     return input_data
-
-
-# def sample_data(features_df, target_df, test_fraction=0.2, savefn=None, random_state=None):
-#     """
-#     This function creates data samples for training and testing machine learning
-#     This function take two pandas dataframes as inputs:
-#       - features_df contains data from feature columns
-#       - target_df contains data from target columns
-#     If a filename is provided for the savefn argument the test dataset is saved
-#     to this file and only the training input and target data is returned. 
-#     If savefn is None (default) then both the train and test input and target data 
-#     samples are returned.
-#     """
-#     n_samples = features_df.shape[0]
-#     test_input = features_df.sample(
-#         int(n_samples*test_fraction), random_state=random_state)
-#     train_input = features_df[~np.isin(features_df.index, test_input.index)]
-#     test_target = target_df[np.isin(target_df.index, test_input.index)]
-#     train_target = target_df[~np.isin(target_df.index, test_input.index)]
-#     if savefn:
-#         test_dataset = pd.concat([test_input, test_target], axis=1, sort=False)
-#         test_dataset.to_csv(savefn)
-#         return train_input, train_target
-        
-#         # fsspec_handle = fsspec.open('abfs://prd-storm-dennis/test.csv', account_name='preciprediagnosisstorage', account_key=storage_acc_key, mode='wt')
-#         # with fsspec_handle.open() as f:
-#         #     test_dataset.to_csv(f)
-#         # return train_input, train_target
-#     else: 
-#         return train_input, train_target, test_input, test_target
 
 
 def random_sample(df, test_fraction, random_state):
