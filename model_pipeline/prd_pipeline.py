@@ -136,7 +136,23 @@ def random_sample(df, test_fraction, random_state):
     train_df = df[~np.isin(df.index, test_df.index)]
     return train_df, test_df
 
+
+def random_time_space_sample(df, test_fraction, random_state, sampling_columns):
+    """
+    Sample test and train dataset randomly over time and space,
+    but keeps all ensemble members in the same sample
+    """
+    unique_time_location = df[df['realization']==0].groupby(sampling_columns)
+    samples = unique_time_location.count().sample(frac=test_fraction, random_state=random_state).reset_index()[sampling_columns]
+
+    samples_labelled = pd.merge(df, samples, how='left', left_on=sampling_columns, right_on=sampling_columns, indicator=True)
+
+    test_df = samples_labelled[samples_labelled._merge=='both'].drop(columns='_merge', axis=1)
+    train_df = samples_labelled[samples_labelled._merge=='left_only'].drop(columns='_merge', axis=1)
     
+    return train_df, test_df
+
+
 def sample_data(df, test_fraction=0.2, test_save=None, random_state=None):
     """
     Sample test and train datasets by selecting the last 20% of timesteps in the data for testing
@@ -269,7 +285,13 @@ def preprocess_data(input_data, feature_dict, test_fraction=0.2):
     
     # Extract and return train and validate datasets
     # train_df, test_df = sample_data(data, test_fraction=test_fraction, random_state=random_state)
-    train_df, val_df = sample_data(data, test_fraction=test_fraction, random_state=random_state)
+    # train_df, val_df = sample_data(data, test_fraction=test_fraction, random_state=random_state)
+    train_df, val_df = random_time_space_sample(
+        data,
+        test_fraction=test_fraction,
+        random_state=random_state,
+        sampling_columns=['time', 'latitude', 'longitude']
+    )
     
     X_train = train_df[prof_feature_columns + feature_dict['single_level']]
     y_train = train_df[feature_dict['target']]
