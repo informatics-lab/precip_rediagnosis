@@ -203,7 +203,7 @@ def preprocess_data(input_data, feature_dict, test_fraction=0.2):
     # drop NaN values in the dataset
 
     data = input_data.dropna()
-    data = data[data['radar_mean_rain_instant'] > 50]  # remove any spuriously high radar data point
+    data = data[data['radar_mean_rain_instant'] < 50]  # remove any spuriously high radar data point
     
     print(f"target has dims: {len(feature_dict['target'])}")
     if isinstance(feature_dict['target'], list):
