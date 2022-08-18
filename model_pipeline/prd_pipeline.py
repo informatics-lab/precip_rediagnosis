@@ -26,7 +26,7 @@ import fsspec
 import pickle
 
 
-def build_model(nprof_features, nheights, nsinglvl_features):
+def build_model(nprof_features, nheights, nsinglvl_features, nbands):
     """
     This 1D convoluational neural network take a regression approach to predict 
     precipitation on a column-wise basis. This model takes vertical profile features 
@@ -59,11 +59,11 @@ def build_model(nprof_features, nheights, nsinglvl_features):
         x = Dense(1024, use_bias=False, activation='relu')(x)
         x = Dense(1024, use_bias=False, activation='relu')(x)
         
-        main_output = Dense(1, use_bias=True, activation='linear', name='main_output')(x)
+        main_output = Dense(nbands, use_bias=True, activation='softmax', name='main_output')(x)
         model = Model(inputs=[profile_input, surf_input], outputs=[main_output])
-    
+
     else:
-        main_output = Dense(1, use_bias=True, activation='linear', name='main_output')(out)
+        main_output = Dense(nbands, activation='softmax', name='main_output')(out) # use_bias=True, 
         model = Model(inputs=[profile_input], outputs=[main_output])
         
     return model
@@ -75,7 +75,7 @@ def train_model(model, data_splits, hyperparameter_dict):
     Hyperparameters use when fitting the model are defined in hyperparameter_dict.
     """
     optimizer = tf.keras.optimizers.Adam(learning_rate=hyperparameter_dict['learning_rate'])
-    model.compile(loss='mean_absolute_error', optimizer=optimizer)
+    model.compile(loss=hyperparameter_dict['loss_function'], optimizer=optimizer)
 
     history = model.fit(data_splits['X_train'], 
                         data_splits['y_train'], 
@@ -94,58 +94,47 @@ def load_data(current_ws, dataset_name):
     return input_data
 
 
-# def sample_data(features_df, target_df, test_fraction=0.2, savefn=None, random_state=None):
-#     """
-#     This function creates data samples for training and testing machine learning
-#     This function take two pandas dataframes as inputs:
-#       - features_df contains data from feature columns
-#       - target_df contains data from target columns
-#     If a filename is provided for the savefn argument the test dataset is saved
-#     to this file and only the training input and target data is returned. 
-#     If savefn is None (default) then both the train and test input and target data 
-#     samples are returned.
-#     """
-#     n_samples = features_df.shape[0]
-#     test_input = features_df.sample(
-#         int(n_samples*test_fraction), random_state=random_state)
-#     train_input = features_df[~np.isin(features_df.index, test_input.index)]
-#     test_target = target_df[np.isin(target_df.index, test_input.index)]
-#     train_target = target_df[~np.isin(target_df.index, test_input.index)]
-#     if savefn:
-#         test_dataset = pd.concat([test_input, test_target], axis=1, sort=False)
-#         test_dataset.to_csv(savefn)
-#         return train_input, train_target
-        
-#         # fsspec_handle = fsspec.open('abfs://prd-storm-dennis/test.csv', account_name='preciprediagnosisstorage', account_key=storage_acc_key, mode='wt')
-#         # with fsspec_handle.open() as f:
-#         #     test_dataset.to_csv(f)
-#         # return train_input, train_target
-#     else: 
-#         return train_input, train_target, test_input, test_target
-
-    
-def sample_data(df, test_fraction=0.2, test_save=None, random_state=None):
+def random_sample(df, test_fraction, random_state):
+    """
+    Sample test and train datasets randomly 
+    Note: due to ensemble members being in different samples this 
+    could leave to data leakage between train and test
+    """
     n_samples = df.shape[0]
     test_df = df.sample(
         int(n_samples*test_fraction), random_state=random_state)
     train_df = df[~np.isin(df.index, test_df.index)]
- 
-    if test_save:
-        container = test_save['datastore_credentials']['container']
-        acc_name = test_save['datastore_credentials']['storage_acc_name']
-        acc_key = test_save['datastore_credentials']['storage_acc_key']
-        # save test dataset
-        fsspec_handle = fsspec.open(
-            f'abfs://{container}/{test_save["filename"]}_test.csv', account_name=acc_name, account_key=acc_key, mode='wt')
-        with fsspec_handle.open() as testfn:
-            test_df.to_csv(testfn)
-        # save train dataset
-        fsspec_handle = fsspec.open(f'abfs://{container}/{test_save["filename"]}_train.csv', account_name=acc_name, account_key=acc_key, mode='wt')
-        with fsspec_handle.open() as trainfn:
-            train_df.to_csv(trainfn)
-    else: 
-        return train_df, test_df
+    return train_df, test_df
+
+
+def random_time_space_sample(df, test_fraction, random_state, sampling_columns):
+    """
+    Sample test and train dataset randomly over time and space,
+    but keeps all ensemble members in the same sample
+    """
+    unique_time_location = df[df['realization']==0].groupby(sampling_columns)
+    samples = unique_time_location.count().sample(frac=test_fraction, random_state=random_state).reset_index()[sampling_columns]
+
+    samples_labelled = pd.merge(df, samples, how='left', left_on=sampling_columns, right_on=sampling_columns, indicator=True)
+
+    test_df = samples_labelled[samples_labelled._merge=='both'].drop(columns='_merge', axis=1)
+    train_df = samples_labelled[samples_labelled._merge=='left_only'].drop(columns='_merge', axis=1)
     
+    return train_df, test_df
+
+
+def sample_data_by_time(df, test_fraction=0.2, test_save=None, random_state=None):
+    """
+    Sample test and train datasets by selecting the last 20% of timesteps in the data for testing
+    """
+    n_timesteps = df.time.unique().size
+    test_samples = np.round(n_timesteps / (1 / test_fraction)).astype('int')
+    test_mask = np.isin(df['time'], df['time'].unique()[-test_samples:])
+    test_df = df[test_mask]
+    train_df = df[~test_mask]
+
+    return train_df, test_df
+   
 
 def reshape_profile_features(df, features, data_dims_dict):
     """
@@ -233,7 +222,7 @@ def preprocess_data(input_data, feature_dict, test_fraction=0.2):
     # Get a list of columns names for profile features
     print('getting profile columns')
     prof_feature_columns = get_profile_columns(feature_dict['profile'], data.columns)
-    print(prof_feature_columns)
+    # print(prof_feature_columns)
     
     print(feature_dict)
     data_dims_dict = {
@@ -247,7 +236,12 @@ def preprocess_data(input_data, feature_dict, test_fraction=0.2):
     random_state = np.random.RandomState()  # TO DO: how to log this in experiments!
     
     # Extract and return train and validate datasets
-    train_df, val_df = sample_data(data, test_fraction=test_fraction, random_state=random_state)
+    train_df, val_df = random_time_space_sample(
+        data,
+        test_fraction=test_fraction,
+        random_state=random_state,
+        sampling_columns=['time', 'latitude', 'longitude']
+    )
     
     X_train = train_df[prof_feature_columns + feature_dict['single_level']]
     y_train = train_df[feature_dict['target']]
