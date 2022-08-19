@@ -3,10 +3,13 @@ import argparse
 import tempfile
 import pathlib
 
+import logging
+
 # third party imports
 import numpy as np
 
-import pandas as pd
+import pandas
+pd=pandas
 
 import tensorflow as tf
 from tensorflow.keras.layers import Dense, Activation, Flatten
@@ -26,6 +29,9 @@ import fsspec
 
 import pickle
 
+PRD_PREFIX = 'prd'
+MERGED_PREFIX = PRD_PREFIX + '_merged'
+CSV_FILE_SUFFIX = 'csv'
 
 def build_model(nprof_features, nheights, nsinglvl_features):
     """
@@ -91,8 +97,12 @@ def load_data(current_ws, dataset_name):
     This function loads data from AzureML storage and returns it as a pandas dataframe 
     """
     dataset = azureml.core.Dataset.get_by_name(current_ws, name=dataset_name)
-    input_data = dataset.to_pandas_dataframe()    
-    return input_data
+
+    with dataset.mount() as ds_mount:
+        print('loading all event data')
+        prd_path_list = [p1 for p1 in pathlib.Path(ds_mount.mount_point).rglob(f'{MERGED_PREFIX}*{CSV_FILE_SUFFIX}') ]
+        merged_df = pandas.concat([pandas.read_csv(p1) for p1 in prd_path_list])
+    return merged_df
 
 
 # def sample_data(features_df, target_df, test_fraction=0.2, savefn=None, random_state=None):
