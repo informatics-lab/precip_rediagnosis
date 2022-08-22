@@ -125,7 +125,7 @@ class MassExtractor():
 
         self._create_logger()
 
-        # This rperesents a list of validity times, i.e. the observation times
+        # This preresents a list of validity times, i.e. the observation times
         # that we are interested in. When dealing with forecast data, the
         # forecast reference time will be these values (validity times), minus
         # the lead time for the particular forecast being processed.
@@ -286,7 +286,7 @@ class ModelStageExtractor(MassExtractor):
 
             var_df_merged = []
             for var1 in height_level_var_mappings.values():
-                self.logger.debug(f'var1')
+                self.logger.debug(f'{var1}')
                 var_at_heights = [hl_df_multirow[hl_df_multirow.height == h1][
                                       merge_coords + [var1]].rename(
                     {var1: f'{var1}_{h1:.1f}'}, axis='columns') for h1 in heights]
@@ -295,9 +295,6 @@ class ModelStageExtractor(MassExtractor):
                                      var_at_heights)]
             height_levels_df = functools.reduce(
                 lambda x, y: x.merge(y, on=merge_coords), var_df_merged)
-
-            mogreps_g_single_ts_uk_df = single_level_df.merge(height_levels_df,
-                                                              on=merge_coords)
 
             mogreps_g_single_ts_uk_df = single_level_df.merge(height_levels_df,
                                                               on=merge_coords)
@@ -341,14 +338,10 @@ class RadarExtractor(MassExtractor):
 
     def extract(self):
         mass_root = self._opts['source_root']
-        calc_dates_list
         fname_mass_template = self._opts['fname_mass_template']
 
         # radar is archived by day, we want to make sure we get the days data
         # for every day where we are looking for any part of that day
-
-
-
 
         fnames_to_extract = [fname_mass_template.format(dt=dt1)
                              for dt1 in self.dates_to_extract]

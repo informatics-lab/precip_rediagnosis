@@ -1,12 +1,11 @@
 {
-  "event_name": "202002_storm_dennis_improver",
-  "Event description": " This is a large storm for which there was a lot of rainfall, with a red rainfall warning.",
+"event_name": "YYYYMM_storm_name",
+  "Event description": " Description of the event.",
   "science_info": [
-    "https://www.metoffice.gov.uk/weather/warnings-and-advice/uk-storm-centre/storm-dennis",
-    "https://www.metoffice.gov.uk/binaries/content/assets/metofficegovuk/pdf/weather/learn-about/uk-past-events/interesting/2020/2020_03_storm_dennis.pdf"
+    "Links to relevant further information about the event."
   ],
-  "event_start": "2020-02-14T18:00Z",
-  "event_end": "2020-02-17T18:00Z",
+  "event_start": "YYYY-MM-DDTHH:MMZ",
+  "event_end": "YYYY-MM-DDTHH:MMZ",
   "target_time_delta": 6,
   "date_fname_template": "{start.year:04d}{start.month:02d}{start.day:02d}T{start.hour:02d}{start.minute:02d}Z_{end.year:04d}{end.month:02d}{end.day:02d}T{end.hour:02d}{end.minute:02d}Z",
   "fname_extension_grid": ".nc",
@@ -70,24 +69,14 @@
       ],
       "single_level_variables": [
         "cloud_amount_of_total_cloud",
-        "rainfall_accumulation-PT03H",
-        "snowfall_accumulation-PT03H",
         "rainfall_rate",
         "snowfall_rate",
         "height_of_orography",
         "pressure_at_mean_sea_level",
         "rainfall_rate",
         "rainfall_rate_from_convection",
-        "rainfall_accumulation-PT03H",
-        "rainfall_accumulation_from_convection-PT03H",
         "snowfall_rate",
-        "snowfall_rate_from_convection",
-        "snowfall_accumulation-PT03H",
-        "snowfall_accumulation_from_convection-PT03H",
-        "rainfall_rate_max-PT03H",
-        "rainfall_rate_from_convection_max-PT03H",
-        "snowfall_rate_max-PT03H",
-        "snowfall_rate_from_convection_max-PT03H"
+        "snowfall_rate_from_convection"
       ],
       "source_root": "moose:/opfc/atm",
       "dataset": "mogreps-g",
