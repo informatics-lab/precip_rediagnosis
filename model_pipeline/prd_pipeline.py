@@ -20,8 +20,8 @@ from sklearn.metrics import mean_absolute_error, r2_score
 
 # azure specific imports
 
-# import azureml.core
-import fsspec
+import azureml.core
+# import fsspec
 
 import pickle
 
@@ -59,11 +59,11 @@ def build_model(nprof_features, nheights, nsinglvl_features, nbands):
         x = Dense(1024, use_bias=False, activation='relu')(x)
         x = Dense(1024, use_bias=False, activation='relu')(x)
         
-        main_output = Dense(nbands, use_bias=True, activation='softmax', name='main_output')(x)
+        main_output = Dense(nbands, use_bias=True, activation='linear', name='main_output')(x)
         model = Model(inputs=[profile_input, surf_input], outputs=[main_output])
 
     else:
-        main_output = Dense(nbands, activation='softmax', name='main_output')(out) # use_bias=True, 
+        main_output = Dense(nbands, activation='linear', name='main_output')(out) # use_bias=True, 
         model = Model(inputs=[profile_input], outputs=[main_output])
         
     return model
@@ -75,7 +75,7 @@ def train_model(model, data_splits, hyperparameter_dict):
     Hyperparameters use when fitting the model are defined in hyperparameter_dict.
     """
     optimizer = tf.keras.optimizers.Adam(learning_rate=hyperparameter_dict['learning_rate'])
-    model.compile(loss=hyperparameter_dict['loss_function'], optimizer=optimizer)
+    model.compile(loss='mean absolute error', optimizer=optimizer)
 
     history = model.fit(data_splits['X_train'], 
                         data_splits['y_train'], 
@@ -230,8 +230,10 @@ def preprocess_data(input_data, feature_dict, test_fraction=0.2):
         'nheights' : len(prof_feature_columns)//len(feature_dict['profile']),
         'nsinglvl_features' :len(feature_dict['single_level']),
     }
-    if len(feature_dict['target']) > 1:
+    if isinstance(feature_dict['target'], list):
         data_dims_dict['nbands'] = len(feature_dict['target'])
+    else:
+        data_dims_dict['nbands'] = 1
     
     random_state = np.random.RandomState()  # TO DO: how to log this in experiments!
     
