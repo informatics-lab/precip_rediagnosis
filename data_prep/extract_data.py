@@ -58,7 +58,10 @@ def main():
         dataset_config = json.load(config_file)
     event_name = dataset_config['event_name']
 
-    logger1 = drivers.get_logger(cmd_args.log_dir,
+    log_path = pathlib.Path(cmd_args.log_dir)
+    if not log_path.is_dir():
+        log_path.mkdir()
+    logger1 = drivers.get_logger(log_path,
                                  drivers.MassExtractor.LOGGER_KEY + '_' + event_name,
                                  cmd_args.output_level)
 

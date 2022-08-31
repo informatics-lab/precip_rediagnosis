@@ -4,3 +4,7 @@
 ./data_prep/submit_data_prep_spice.sh 2020_storm_francis
 ./data_prep/submit_data_prep_spice.sh 2021_storm_barra
 ./data_prep/submit_data_prep_spice.sh 2022_storm_eunice_franklin
+./data_prep/submit_data_prep_spice.sh 2020_amber_nswws_dec
+./data_prep/submit_data_prep_spice.sh 2020_amber_nswws_oct
+./data_prep/submit_data_prep_spice.sh 2021_amber_nswws_feb
+./data_prep/submit_data_prep_spice.sh 2021_amber_nswws_oct

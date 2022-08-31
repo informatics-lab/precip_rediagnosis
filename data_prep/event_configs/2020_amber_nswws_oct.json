@@ -26,15 +26,13 @@
             "wind_speed_on_height_levels"
           ],
           "single_level_variables": [
-            "cloud_amount_of_total_cloud",
-            "rainfall_rate",
-            "snowfall_rate",
-            "height_of_orography",
-            "pressure_at_mean_sea_level",
-            "rainfall_rate",
-            "rainfall_rate_from_convection",
-            "snowfall_rate",
-            "snowfall_rate_from_convection"
+          "cloud_amount_of_total_cloud",
+          "height_of_orography",
+          "pressure_at_mean_sea_level",
+          "rainfall_rate",
+          "rainfall_rate_from_convection",
+          "snowfall_rate",
+          "snowfall_rate_from_convection"
           ],
           "source_root": "moose:/opfc/atm",
           "dataset": "mogreps-g",

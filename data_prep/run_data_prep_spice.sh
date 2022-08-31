@@ -8,7 +8,7 @@
 echo Processing event ${EVENT_NAME}
 
 export SRC_PATH=$HOME/prog/precip_rediagnosis/
-export OUTPUT_PATH=/scratch/shaddad/precip_rediagnosis/train_202207
+export OUTPUT_PATH=$SCRATCH/precip_rediagnosis/train_202208
 export EVENT_CONFIG=${SRC_PATH}/data_prep/event_configs/${EVENT_NAME}.json
 export TARGET_CUBE_PATH=/project/informatics_lab/precip_rediagnosis/target_cube.nc
 

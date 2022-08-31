@@ -11,3 +11,6 @@ dependencies:
   - cartopy
   - seaborn
   - windrose
+  - pip:
+    - azureml-core
+    - azureml-dataset-runtime
