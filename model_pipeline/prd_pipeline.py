@@ -81,6 +81,8 @@ def train_model(model, data_splits, hyperparameter_dict):
     This function trains the input model with the given data samples in data_splits. 
     Hyperparameters use when fitting the model are defined in hyperparameter_dict.
     """
+    
+    
     optimizer = tf.keras.optimizers.Adam(learning_rate=hyperparameter_dict['learning_rate'])
     model.compile(loss='mean_absolute_error', optimizer=optimizer)
 
