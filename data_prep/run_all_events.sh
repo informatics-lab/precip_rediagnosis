@@ -1,10 +1,7 @@
-./data_prep/submit_data_prep_spice.sh 2020_storm_ciara
-./data_prep/submit_data_prep_spice.sh 2020_storm_dennis
-./data_prep/submit_data_prep_spice.sh 2020_storm_ellen
-./data_prep/submit_data_prep_spice.sh 2020_storm_francis
-./data_prep/submit_data_prep_spice.sh 2021_storm_barra
-./data_prep/submit_data_prep_spice.sh 2022_storm_eunice_franklin
-./data_prep/submit_data_prep_spice.sh 2020_amber_nswws_dec
-./data_prep/submit_data_prep_spice.sh 2020_amber_nswws_oct
-./data_prep/submit_data_prep_spice.sh 2021_amber_nswws_feb
-./data_prep/submit_data_prep_spice.sh 2021_amber_nswws_oct
+#!/usr/bin/env bash
+# This script should be run from the Data Prep Environment
+for f1 in $(ls -1 data_prep/event_configs/*.json); do
+  EVENT_NAME=$(python -c "import pathlib;print(pathlib.Path('${f1}').stem)")
+  echo ${EVENT_NAME}
+  ./data_prep/submit_data_prep_spice.sh ${EVENT_NAME}
+done;

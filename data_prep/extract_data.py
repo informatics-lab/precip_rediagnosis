@@ -60,7 +60,7 @@ def main():
 
     log_path = pathlib.Path(cmd_args.log_dir)
     if not log_path.is_dir():
-        log_path.mkdir()
+        log_path.mkdir(parents=True)
     logger1 = drivers.get_logger(log_path,
                                  drivers.MassExtractor.LOGGER_KEY + '_' + event_name,
                                  cmd_args.output_level)
@@ -75,7 +75,7 @@ def main():
                                         DATETIME_PARSER)
     dest_dir = pathlib.Path(cmd_args.output_path) / event_name
     if not dest_dir.is_dir():
-        dest_dir.mkdir()
+        dest_dir.mkdir(parents=True)
 
     logger1.info(f'processing config for event {event_name}')
     logger1.info(f'writing output to {dest_dir}')
