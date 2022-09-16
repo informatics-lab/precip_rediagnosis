@@ -1,4 +1,4 @@
-name: prd_model_dev_azml
+name: prd_model_dev_azml_001
 channels:
   - conda-forge
 dependencies:
@@ -14,7 +14,8 @@ dependencies:
   - matplotlib=3.5
   - tf2onnx
   - fsspec
-  - adlfs   
+  - adlfs  
+  - pip
   - pip:
     - azureml-defaults
     - azureml-widgets
