@@ -1,0 +1,11 @@
+name: prd_ml_cluster_azureml
+channels:
+  - conda-forge
+dependencies:
+  - python=3.8
+  - pandas
+  - scikit-learn
+  - tensorflow
+  - pip
+  - pip:
+      - azureml-defaults
