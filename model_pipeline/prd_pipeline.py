@@ -24,7 +24,12 @@ from sklearn.metrics import mean_absolute_error, r2_score
 
 # azure specific imports
 
-import azureml.core
+try:
+    import azureml.core
+    USING_AZML=True
+except ImportError:
+    print('AzureML libraries not found, using local execution functions.')
+    USING_AZML=False
 import fsspec
 
 import pickle
@@ -94,18 +99,26 @@ def train_model(model, data_splits, hyperparameter_dict):
     return model
     
 
-def load_data(current_ws, dataset_name):
-    """
-    This function loads data from AzureML storage and returns it as a pandas dataframe 
-    """
-    dataset = azureml.core.Dataset.get_by_name(current_ws, name=dataset_name)
+if USING_AZML:
+    def load_data(current_ws, dataset_name):
+        """
+        This function loads data from AzureML storage and returns it as a pandas dataframe 
+        """
+        dataset = azureml.core.Dataset.get_by_name(current_ws, name=dataset_name)
 
-    with dataset.mount() as ds_mount:
+        with dataset.mount() as ds_mount:
+            print('loading all event data')
+            prd_path_list = [p1 for p1 in pathlib.Path(ds_mount.mount_point).rglob(f'{MERGED_PREFIX}*{CSV_FILE_SUFFIX}') ]
+            merged_df = pandas.concat([pandas.read_csv(p1) for p1 in prd_path_list])
+        return merged_df
+
+else:
+    def load_data(dataset_dir):
         print('loading all event data')
-        prd_path_list = [p1 for p1 in pathlib.Path(ds_mount.mount_point).rglob(f'{MERGED_PREFIX}*{CSV_FILE_SUFFIX}') ]
+        prd_path_list = [p1 for p1 in dataset_dir.rglob(f'{MERGED_PREFIX}*{CSV_FILE_SUFFIX}') ]
         merged_df = pandas.concat([pandas.read_csv(p1) for p1 in prd_path_list])
-    return merged_df
-
+        return merged_df
+        
 
 # def sample_data(features_df, target_df, test_fraction=0.2, savefn=None, random_state=None):
 #     """
@@ -227,6 +240,8 @@ def preprocess_data(input_data, feature_dict, test_fraction=0.2):
     # drop NaN values in the dataset
     data = input_data.dropna()
     
+    data.reset_index(inplace=True)
+    
     print(f"target has dims: {len(feature_dict['target'])}")
     if isinstance(feature_dict['target'], list):
         print(f"dropping smallest bin: {feature_dict['target'][0]}")
@@ -277,6 +292,8 @@ def preprocess_data(input_data, feature_dict, test_fraction=0.2):
     # Scale data to have zero mean and standard deviation of one
     standardScaler = StandardScaler()
 
+    # import pdb
+    # pdb.set_trace()
     X_train_scaled = pd.DataFrame(
         standardScaler.fit_transform(X_train), 
         columns=X_train.columns,
