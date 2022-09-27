@@ -76,9 +76,9 @@ def main():
         'batch_size': args.batch_size
     }
     
-    model = prd_pipeline.train_model(model, data_splits, hyperparameter_dict)
+    model, history = prd_pipeline.train_model(model, data_splits, hyperparameter_dict)
     
-    for k1, v1 in model.history.history.items():
+    for k1, v1 in history.history.items():
         prd_run.log(k1, v1[-1])
 
     y_pred = model.predict(data_splits['X_val'])
