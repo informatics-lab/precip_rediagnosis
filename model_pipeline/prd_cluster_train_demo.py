@@ -68,7 +68,11 @@ def main():
         'learning_rate': args.learning_rate, 
         'batch_size': args.batch_size
     }
-    model = prd_pipeline.train_model(model, data_splits, hyperparameter_dict, log_dir=args.log_dir)
+    log_dir = pathlib.Path(args.log_dir)
+    if not log_dir.is_dir():
+        log_dir.mkdir(parents=True)
+        
+    model = prd_pipeline.train_model(model, data_splits, hyperparameter_dict, log_dir=str(log_dir))
 
     y_pred = model.predict(data_splits['X_val'])
     
