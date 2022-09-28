@@ -28,6 +28,7 @@ def get_args():
     parser.add_argument('--learning-rate', dest='learning_rate', type=float)
     parser.add_argument('--test-fraction', dest='test_frac', type=float)
     parser.add_argument('--test-filename', dest='test_filename', type=float)
+    parser.add_argument('--log-dir', dest='log_dir')
 
     args = parser.parse_args()
     return args
@@ -51,17 +52,23 @@ def main():
 
     input_data = prd_pipeline.load_data(prd_ws, args.dataset_name)
     data_splits, data_dims = prd_pipeline.preprocess_data(
-        input_data, feature_dict, 
-        test_fraction=args.test_frac, test_savefn=args.test_filename)
+        input_data, 
+        feature_dict, 
+        test_fraction=args.test_frac, 
+        # test_savefn=args.test_filename
+    )
 
-    model = prd_pipeline.build_model(**data_dims)
+    model = prd_pipeline.build_model(nprof_features=data_dims['nprof_features'], 
+                                     nheights=data_dims['nheights'], 
+                                     nsinglvl_features=data_dims['nsinglvl_features'],
+                                     )
     
     hyperparameter_dict = {
         'epochs': args.epochs, 
         'learning_rate': args.learning_rate, 
         'batch_size': args.batch_size
     }
-    model = prd_pipeline.train_model(model, data_splits, hyperparameter_dict)
+    model = prd_pipeline.train_model(model, data_splits, hyperparameter_dict, log_dir=args.log_dir)
 
     y_pred = model.predict(data_splits['X_val'])
     

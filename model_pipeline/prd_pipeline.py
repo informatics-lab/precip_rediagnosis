@@ -30,7 +30,7 @@ try:
 except ImportError:
     print('AzureML libraries not found, using local execution functions.')
     USING_AZML=False
-import fsspec
+# import fsspec
 
 import pickle
 
@@ -81,12 +81,13 @@ def build_model(nprof_features, nheights, nsinglvl_features):
     return model
 
 
-def train_model(model, data_splits, hyperparameter_dict):
+def train_model(model, data_splits, hyperparameter_dict, log_dir):
     """
     This function trains the input model with the given data samples in data_splits. 
     Hyperparameters use when fitting the model are defined in hyperparameter_dict.
     """
     
+    tf_callbacks = [tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)]
     
     optimizer = tf.keras.optimizers.Adam(learning_rate=hyperparameter_dict['learning_rate'])
     model.compile(loss='mean_absolute_error', optimizer=optimizer)
@@ -95,7 +96,9 @@ def train_model(model, data_splits, hyperparameter_dict):
                         data_splits['y_train'], 
                         epochs=hyperparameter_dict['epochs'], 
                         batch_size=hyperparameter_dict['batch_size'], 
-                        validation_data=(data_splits['X_val'], data_splits['y_val']), verbose=True)
+                        validation_data=(data_splits['X_val'], data_splits['y_val']), 
+                        callbacks=tf_callbacks,
+                        verbose=True)
     return model
     
 
@@ -160,15 +163,15 @@ def sample_data(df, test_fraction=0.2, test_save=None, random_state=None):
         container = test_save['datastore_credentials']['container']
         acc_name = test_save['datastore_credentials']['storage_acc_name']
         acc_key = test_save['datastore_credentials']['storage_acc_key']
-        # save test dataset
-        fsspec_handle = fsspec.open(
-            f'abfs://{container}/{test_save["filename"]}_test.csv', account_name=acc_name, account_key=acc_key, mode='wt')
-        with fsspec_handle.open() as testfn:
-            test_df.to_csv(testfn)
-        # save train dataset
-        fsspec_handle = fsspec.open(f'abfs://{container}/{test_save["filename"]}_train.csv', account_name=acc_name, account_key=acc_key, mode='wt')
-        with fsspec_handle.open() as trainfn:
-            train_df.to_csv(trainfn)
+        # # save test dataset
+        # fsspec_handle = fsspec.open(
+        #     f'abfs://{container}/{test_save["filename"]}_test.csv', account_name=acc_name, account_key=acc_key, mode='wt')
+        # with fsspec_handle.open() as testfn:
+        #     test_df.to_csv(testfn)
+        # # save train dataset
+        # fsspec_handle = fsspec.open(f'abfs://{container}/{test_save["filename"]}_train.csv', account_name=acc_name, account_key=acc_key, mode='wt')
+        # with fsspec_handle.open() as trainfn:
+        #     train_df.to_csv(trainfn)
     else: 
         return train_df, test_df
     
