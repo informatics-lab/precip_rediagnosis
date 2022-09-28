@@ -1,11 +1,11 @@
-name: prd_ml_cluster_azureml
+name: prd_ml_cluster_azml
 channels:
   - conda-forge
 dependencies:
   - python=3.8
-  - pandas
-  - scikit-learn
-  - tensorflow
+  - pandas=1.3
+  - scikit-learn=1.0
+  - tensorflow=2.8
   - pip
   - pip:
       - azureml-defaults
