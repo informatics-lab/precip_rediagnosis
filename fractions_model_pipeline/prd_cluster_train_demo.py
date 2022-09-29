@@ -29,6 +29,7 @@ def get_args():
     parser.add_argument('--batch-size', dest='batch_size', type=int)
     parser.add_argument('--learning-rate', dest='learning_rate', type=float)
     parser.add_argument('--test-fraction', dest='test_fraction', type=float)
+    parser.add_argument('--log-dir', dest='log_dir')
 
     args = parser.parse_args()
     return args
@@ -76,9 +77,10 @@ def main():
         'batch_size': args.batch_size
     }
     
-    model = prd_pipeline.train_model(model, data_splits, hyperparameter_dict)
+    model, history = prd_pipeline.train_model(model, data_splits, hyperparameter_dict, log_dir=args.log_dir)
     
-    for k1, v1 in model.history.history.items():
+    # for k1, v1 in model.history.history.items():
+    for k1, v1 in history.history.items():
         prd_run.log(k1, v1[-1])
 
     y_pred = model.predict(data_splits['X_val'])

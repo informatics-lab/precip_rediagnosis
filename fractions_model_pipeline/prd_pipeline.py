@@ -19,11 +19,19 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_absolute_error, r2_score
 
 # azure specific imports
-import azureml.core
-
+try:
+    import azureml.core
+    USING_AZML=True
+except ImportError:
+    print('AzureML libraries not found, using local execution functions.')
+    USING_AZML=False
 # import fsspec
+
 import pickle
 
+PRD_PREFIX = 'prd'
+MERGED_PREFIX = PRD_PREFIX + '_merged'
+CSV_FILE_SUFFIX = 'csv'
 
 def build_model(nprof_features, nheights, nsinglvl_features, nbands):
     """
@@ -68,11 +76,13 @@ def build_model(nprof_features, nheights, nsinglvl_features, nbands):
     return model
 
 
-def train_model(model, data_splits, hyperparameter_dict):
+def train_model(model, data_splits, hyperparameter_dict, log_dir):
     """
     This function trains the input model with the given data samples in data_splits. 
     Hyperparameters use when fitting the model are defined in hyperparameter_dict.
     """
+    tf_callbacks = [tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)]
+
     optimizer = tf.keras.optimizers.Adam(learning_rate=hyperparameter_dict['learning_rate'])
     model.compile(loss=tf.keras.losses.KLDivergence(), optimizer=optimizer, metrics=['accuracy'])
 
@@ -80,17 +90,30 @@ def train_model(model, data_splits, hyperparameter_dict):
                         data_splits['y_train'], 
                         epochs=hyperparameter_dict['epochs'], 
                         batch_size=hyperparameter_dict['batch_size'], 
-                        validation_data=(data_splits['X_val'], data_splits['y_val']), verbose=True)
+                        validation_data=(data_splits['X_val'], data_splits['y_val']), 
+                        callbacks=tf_callbacks,
+                        verbose=True)
     return model, history
 
+if USING_AZML:
+    def load_data(current_ws, dataset_name):
+        """
+        This function loads data from AzureML storage and returns it as a pandas dataframe 
+        """
+        dataset = azureml.core.Dataset.get_by_name(current_ws, name=dataset_name)
 
-def load_data(current_ws, dataset_name):
-    """
-    This function loads data from AzureML storage and returns it as a pandas dataframe 
-    """
-    dataset = azureml.core.Dataset.get_by_name(current_ws, name=dataset_name)
-    input_data = dataset.to_pandas_dataframe()    
-    return input_data
+        with dataset.mount() as ds_mount:
+            print('loading all event data')
+            prd_path_list = [p1 for p1 in pathlib.Path(ds_mount.mount_point).rglob(f'{MERGED_PREFIX}*{CSV_FILE_SUFFIX}') ]
+            merged_df = pd.concat([pd.read_csv(p1) for p1 in prd_path_list])
+        return merged_df
+
+else:
+    def load_data(dataset_dir):
+        print('loading all event data')
+        prd_path_list = [p1 for p1 in dataset_dir.rglob(f'{MERGED_PREFIX}*{CSV_FILE_SUFFIX}') ]
+        merged_df = pandas.concat([pandas.read_csv(p1) for p1 in prd_path_list])
+        return merged_df
 
 
 def random_sample(df, test_fraction, random_state):
