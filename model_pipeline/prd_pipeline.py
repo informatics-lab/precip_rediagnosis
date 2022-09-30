@@ -30,7 +30,7 @@ try:
 except ImportError:
     print('AzureML libraries not found, using local execution functions.')
     USING_AZML=False
-# import fsspec
+import fsspec
 
 import pickle
 
@@ -102,8 +102,16 @@ def train_model(model, data_splits, hyperparameter_dict, log_dir):
     return model
     
 
+def load_data_local(dataset_dir):
+    print('loading all event data')
+    dataset_dir = pathlib.Path(dataset_dir)
+    prd_path_list = [p1 for p1 in dataset_dir.rglob(f'{MERGED_PREFIX}*{CSV_FILE_SUFFIX}') ]
+    merged_df = pandas.concat([pandas.read_csv(p1) for p1 in prd_path_list])
+    return merged_df
+
 if USING_AZML:
-    def load_data(current_ws, dataset_name):
+    
+    def load_data_azml_dataset(current_ws, dataset_name):
         """
         This function loads data from AzureML storage and returns it as a pandas dataframe 
         """
@@ -114,13 +122,50 @@ if USING_AZML:
             prd_path_list = [p1 for p1 in pathlib.Path(ds_mount.mount_point).rglob(f'{MERGED_PREFIX}*{CSV_FILE_SUFFIX}') ]
             merged_df = pandas.concat([pandas.read_csv(p1) for p1 in prd_path_list])
         return merged_df
+    
+def load_data_azure_blob(az_blob_cred, blob_path):
+    """
+    Load data direct from a blob store. Need to provide credentials
+    Inputs
+    az_blob_cred - A dictionary loaded from the credentials.json file.
+    blob_path - The relative path to the object(s) in the blob store relative to the container specified in the credentials.
+    """
+    
+    container = az_blob_cred['container']
+    acc_name = az_blob_cred['storage_acc_name']
+    acc_key = az_blob_cred['storage_acc_key']
 
-else:
-    def load_data(dataset_dir):
-        print('loading all event data')
-        prd_path_list = [p1 for p1 in dataset_dir.rglob(f'{MERGED_PREFIX}*{CSV_FILE_SUFFIX}') ]
-        merged_df = pandas.concat([pandas.read_csv(p1) for p1 in prd_path_list])
-        return merged_df
+    prd_data_url = f'abfs://{container}/{blob_path}'
+
+    handle1 = fsspec.open_files(
+        prd_data_url,
+        account_name=acc_name, 
+        account_key=acc_key
+    )
+
+    fsspec_handle = fsspec.open(
+        prd_data_url,
+        account_name=acc_name, 
+        account_key=acc_key
+    )
+
+    with fsspec_handle.open() as prd_data_handle:
+        prd_merged_data = pandas.read_csv(prd_data_handle)
+
+    csv_list = []
+    for h1 in list(handle1)[:2]:
+        with h1.open() as prd_dh:
+            csv_list += [pandas.read_csv(prd_dh)]
+
+    prd_merged_df = pandas.concat(csv_list)
+    return prd_merged_df
+    
+
+    # create a load data function that takes a path on disk through the DatasetConfigConsumption object created by calling
+    # mydataset.as_download
+    # wheich get passed as an argument to the script
+    # argument will then contain the path to the folder with the files
+    
         
 
 # def sample_data(features_df, target_df, test_fraction=0.2, savefn=None, random_state=None):

@@ -9,7 +9,12 @@ import tempfile
 import pathlib
 
 # azure specific imports
-import azureml.core
+USING_AZML=False
+try:
+    import azureml.core
+    USING_AZML=True
+except ImportError:
+    print('AzureML libraries not found.')
 
 import prd_pipeline
 
@@ -29,6 +34,8 @@ def get_args():
     parser.add_argument('--test-fraction', dest='test_frac', type=float)
     parser.add_argument('--test-filename', dest='test_filename', type=float)
     parser.add_argument('--log-dir', dest='log_dir')
+    parser.add_argument('--data-path',dest='data_path')
+    parser.add_argument('--blob',dest='from_blobstore',action='store_true')
 
     args = parser.parse_args()
     return args
@@ -50,7 +57,18 @@ def main():
     prd_ws = prd_run.experiment.workspace
 
 
-    input_data = prd_pipeline.load_data(prd_ws, args.dataset_name)
+    if args.data_path is not None:
+        if args.from_blobstore:
+            with open('credentials_file.json') as credentials_file:
+                az_blob_cred = json.load(credentials_file)
+            input_data = prd_pipeline.load_data_azure_blob(az_blob_cred, args.data_path)
+        else:
+            input_data = prd_pipeline.load_data_local(args.data_path)
+    else:
+        input_data = prd_pipeline.load_data(prd_ws, 
+                                            args.dataset_name,
+                                           )
+                                            
     data_splits, data_dims = prd_pipeline.preprocess_data(
         input_data, 
         feature_dict, 
