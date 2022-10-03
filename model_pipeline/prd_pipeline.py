@@ -9,9 +9,7 @@ import tempfile
 # third party imports
 import numpy as np
 
-import pandas
-pd=pandas
-
+import pandas as pd
 import tensorflow as tf
 from tensorflow.keras.layers import Dense, Activation, Flatten
 from tensorflow.keras.layers import Conv1D, concatenate
@@ -107,7 +105,7 @@ def load_data_local(dataset_dir):
     print('loading all event data')
     dataset_dir = pathlib.Path(dataset_dir)
     prd_path_list = [p1 for p1 in dataset_dir.rglob(f'{MERGED_PREFIX}*{CSV_FILE_SUFFIX}') ]
-    merged_df = pandas.concat([pandas.read_csv(p1) for p1 in prd_path_list])
+    merged_df = pd.concat([pd.read_csv(p1) for p1 in prd_path_list])
     return merged_df
 
 if USING_AZML:
@@ -127,7 +125,7 @@ if USING_AZML:
         with dataset.mount() as ds_mount:
             print('loading all event data from azml file dataset')
             prd_path_list = [p1 for p1 in pathlib.Path(ds_mount.mount_point).rglob(f'{MERGED_PREFIX}*{CSV_FILE_SUFFIX}') ]
-            merged_df = pandas.concat([pandas.read_csv(p1) for p1 in prd_path_list])
+            merged_df = pd.concat([pd.read_csv(p1) for p1 in prd_path_list])
         return merged_df
     
 def load_data_azure_blob(az_blob_cred, blob_path):
@@ -157,14 +155,14 @@ def load_data_azure_blob(az_blob_cred, blob_path):
     )
 
     with fsspec_handle.open() as prd_data_handle:
-        prd_merged_data = pandas.read_csv(prd_data_handle)
+        prd_merged_data = pd.read_csv(prd_data_handle)
 
     csv_list = []
     for h1 in list(handle1)[:2]:
         with h1.open() as prd_dh:
-            csv_list += [pandas.read_csv(prd_dh)]
+            csv_list += [pd.read_csv(prd_dh)]
 
-    prd_merged_df = pandas.concat(csv_list)
+    prd_merged_df = pd.concat(csv_list)
     return prd_merged_df
     
 

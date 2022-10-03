@@ -43,7 +43,6 @@ def main():
                    }    
     
 
-
     if args.data_path is not None:
         if args.from_blobstore:
             with open('credentials_file.json') as credentials_file:
