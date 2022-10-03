@@ -31,7 +31,7 @@ To make available in a notebook, you will need to run an extra command to make y
 
 ```
 conda activate myenv
-python -m ipykernel install --user --name=myenv_display_name
+python -m ipykernel install --user --name=myenv_kernel_name --display-name="My Magniloquent Env"
 ```
 
 [source](https://medium.com/@nrk25693/how-to-add-your-conda-environment-to-your-jupyter-notebook-in-just-4-steps-abeab8b8d084)
