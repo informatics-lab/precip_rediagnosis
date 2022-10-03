@@ -21,6 +21,14 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_absolute_error, r2_score
 
+# when using mlflow inside a training run submitted to a compute cluster, azureml
+# will set up mlflow tracking as part of the standard set up, so unlike when we run
+# in a notebook, the is no need to set the tracking URI
+# See this doc page for details: https://learn.microsoft.com/en-us/azure/machine-learning/v1/how-to-use-mlflow?tabs=azuremlsdk under "tracking runs running on azure machine learning".
+
+import mlflow
+mlflow.tensorflow.autolog()
+
 # azure specific imports
 
 try:
@@ -29,8 +37,8 @@ try:
 except ImportError:
     print('AzureML libraries not found, using local execution functions.')
     USING_AZML=False
-import fsspec
 
+import fsspec
 import pickle
 
 PRD_PREFIX = 'prd'
@@ -383,15 +391,30 @@ def calc_metrics(data_splits, y_pred):
     metrics_dict = {}
     metrics_dict['mean_absolute_error'] = mean_absolute_error(data_splits['y_val'], y_pred)
     metrics_dict['R-squared score'] = r2_score(data_splits['y_val'], y_pred)
-    current_run = azureml.core.Run.get_context()
 
     for k1, v1 in metrics_dict.items():
-        current_run.log(k1, v1)
+        mlflow.log_metric(k1, v1)
     return metrics_dict
+
+
+
+def save_model(model, prd_model_name):
+    mlflow.keras.log_model(model, prd_model_name)
+
 
 if USING_AZML:
 
-    def save_model(model, prd_model_name):
+    def calc_metrics_azml(data_splits, y_pred):
+        metrics_dict = {}
+        metrics_dict['mean_absolute_error'] = mean_absolute_error(data_splits['y_val'], y_pred)
+        metrics_dict['R-squared score'] = r2_score(data_splits['y_val'], y_pred)
+        current_run = azureml.core.Run.get_context()
+
+        for k1, v1 in metrics_dict.items():
+            current_run.log(k1, v1)
+        return metrics_dict
+
+    def save_model_azml(model, prd_model_name):
         prd_run = azureml.core.Run.get_context()
 
         # We dont access a workspace in the same way in a script compared to a notebook, as described in the stackoverflow post:

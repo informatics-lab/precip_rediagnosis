@@ -42,7 +42,6 @@ def main():
                     'target': args.target_parameter,
                    }    
     
-
     if args.data_path is not None:
         if args.from_blobstore:
             with open('credentials_file.json') as credentials_file:
@@ -80,10 +79,10 @@ def main():
     
     prd_model_name = args.model_name
     
+    # calculate some metrics
+    ma_error, rsqd = prd_pipeline.calc_metrics(data_splits, y_pred)
 
     prd_pipeline.save_model(model, prd_model_name)
 
-    # calculate some metrics
-    ma_error, rsqd = prd_pipeline.calc_metrics(data_splits, y_pred)
     
 main()
