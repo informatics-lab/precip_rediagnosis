@@ -4,6 +4,7 @@ import tempfile
 import pathlib
 
 import logging
+import tempfile
 
 # third party imports
 import numpy as np
@@ -111,14 +112,20 @@ def load_data_local(dataset_dir):
 
 if USING_AZML:
     
-    def load_data_azml_dataset(current_ws, dataset_name):
+    def load_data_azml_dataset(dataset_name):
         """
         This function loads data from AzureML storage and returns it as a pandas dataframe 
         """
-        dataset = azureml.core.Dataset.get_by_name(current_ws, name=dataset_name)
+        prd_run = azureml.core.Run.get_context()
+
+        # We dont access a workspace in the same way in a script compared to a notebook, as described in the stackoverflow post:
+        # https://stackoverflow.com/questions/68778097/get-current-workspace-from-inside-a-azureml-pipeline-step 
+        prd_ws = prd_run.experiment.workspace
+
+        dataset = azureml.core.Dataset.get_by_name(prd_ws, name=dataset_name)
 
         with dataset.mount() as ds_mount:
-            print('loading all event data')
+            print('loading all event data from azml file dataset')
             prd_path_list = [p1 for p1 in pathlib.Path(ds_mount.mount_point).rglob(f'{MERGED_PREFIX}*{CSV_FILE_SUFFIX}') ]
             merged_df = pandas.concat([pandas.read_csv(p1) for p1 in prd_path_list])
         return merged_df
@@ -130,7 +137,7 @@ def load_data_azure_blob(az_blob_cred, blob_path):
     az_blob_cred - A dictionary loaded from the credentials.json file.
     blob_path - The relative path to the object(s) in the blob store relative to the container specified in the credentials.
     """
-    
+    print('loading data direct from blobstore')
     container = az_blob_cred['container']
     acc_name = az_blob_cred['storage_acc_name']
     acc_key = az_blob_cred['storage_acc_key']
@@ -352,6 +359,7 @@ def preprocess_data(input_data, feature_dict, test_fraction=0.2):
         columns=X_val.columns,
         index=X_val.index)
 
+    #TODO: we should rather not save kicles if possible, theres no guarentee of being able to load in future. Would be better to save parameters as a JSON. We could probably save as a metric with the run so we can load in the same parameters when loading a saved model
     with open('standardScaler.pkl', 'wb') as fout:
         pickle.dump(standardScaler, fout)
 
@@ -373,11 +381,36 @@ def preprocess_data(input_data, feature_dict, test_fraction=0.2):
     return data_splits, data_dims_dict
 
 
-def calc_metrics(current_run, data_splits, y_pred):
+def calc_metrics(data_splits, y_pred):
     metrics_dict = {}
     metrics_dict['mean_absolute_error'] = mean_absolute_error(data_splits['y_val'], y_pred)
     metrics_dict['R-squared score'] = r2_score(data_splits['y_val'], y_pred)
+    current_run = azureml.core.Run.get_context()
+
     for k1, v1 in metrics_dict.items():
         current_run.log(k1, v1)
     return metrics_dict
+
+if USING_AZML:
+
+    def save_model(model, prd_model_name):
+        prd_run = azureml.core.Run.get_context()
+
+        # We dont access a workspace in the same way in a script compared to a notebook, as described in the stackoverflow post:
+        # https://stackoverflow.com/questions/68778097/get-current-workspace-from-inside-a-azureml-pipeline-step 
+        prd_ws = prd_run.experiment.workspace
+
+        # save the model to temp directory and save to the run. 
+        # (The local files will be cleaned up with the temp directory.)
+        with tempfile.TemporaryDirectory() as td1:
+            # save model architecure as JSON
+            # this can be loaded using tf.keras.models.model_from_json and then training can be run
+            model_json_path = pathlib.Path(td1) / (prd_model_name + '.json')
+            with open(model_json_path,'w') as json_file:
+                json_file.write(model.to_json())
+            prd_run.upload_file(name=prd_model_name + '_architecture', path_or_stream=str(model_json_path) )
+            model_save_path = pathlib.Path(td1) / prd_model_name
+            model.save(model_save_path)
+            prd_run.upload_folder(name=prd_model_name, path=str(model_save_path))
+            prd_run.register_model(prd_model_name, prd_model_name + '/')
     
