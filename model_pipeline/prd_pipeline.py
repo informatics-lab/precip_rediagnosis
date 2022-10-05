@@ -27,7 +27,6 @@ from sklearn.metrics import mean_absolute_error, r2_score
 # See this doc page for details: https://learn.microsoft.com/en-us/azure/machine-learning/v1/how-to-use-mlflow?tabs=azuremlsdk under "tracking runs running on azure machine learning".
 
 import mlflow
-mlflow.tensorflow.autolog()
 
 # azure specific imports
 
@@ -44,6 +43,10 @@ import pickle
 PRD_PREFIX = 'prd'
 MERGED_PREFIX = PRD_PREFIX + '_merged'
 CSV_FILE_SUFFIX = 'csv'
+
+
+def setup_logging():
+    mlflow.tensorflow.autolog(log_model_signatures=True)
 
 def build_model(nprof_features, nheights, nsinglvl_features):
     """
@@ -95,6 +98,8 @@ def train_model(model, data_splits, hyperparameter_dict, log_dir):
     """
     
     tf_callbacks = [tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)]
+    mlflow.log_param('learning_rate', hyperparameter_dict['learning_rate'])
+    mlflow.log_param('batch_size', hyperparameter_dict['batch_size'])
     
     optimizer = tf.keras.optimizers.Adam(learning_rate=hyperparameter_dict['learning_rate'])
     model.compile(loss='mean_absolute_error', optimizer=optimizer)

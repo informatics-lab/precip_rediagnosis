@@ -28,6 +28,7 @@ def get_args():
     parser.add_argument('--log-dir', dest='log_dir')
     parser.add_argument('--data-path',dest='data_path')
     parser.add_argument('--blob',dest='from_blobstore',action='store_true')
+    parser.add_argument('--autolog',dest='autolog',action='store_true')
 
     args = parser.parse_args()
     return args
@@ -36,6 +37,9 @@ def get_args():
 def main():
     
     args = get_args()
+    
+    if args.autolog:
+        prd_pipeline.setup_logging()
     
     feature_dict = {'profile': args.profile_features,
                     'single_level': args.single_level_features,
