@@ -1,0 +1,1793 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "datastores_azureml_globaldatasets_nameNodeAddress": {
+            "type": "SecureString"
+        },
+        "datastores_workspaceartifactstore_nameNodeAddress": {
+            "type": "SecureString"
+        },
+        "datastores_workspaceblobstore_nameNodeAddress": {
+            "type": "SecureString"
+        },
+        "datastores_workspacefilestore_nameNodeAddress": {
+            "type": "SecureString"
+        },
+        "datastores_workspaceworkingdirectory_nameNodeAddress": {
+            "type": "SecureString"
+        },
+        "virtualNetworks_prd_vnet_name": {
+            "defaultValue": "prd_vnet",
+            "type": "String"
+        },
+        "vaults_preciprediagnosiskeys_name": {
+            "defaultValue": "preciprediagnosiskeys",
+            "type": "String"
+        },
+        "networkSecurityGroups_prd_nsg_name": {
+            "defaultValue": "prd_nsg",
+            "type": "String"
+        },
+        "components_preciprediagno1325391227_name": {
+            "defaultValue": "preciprediagno1325391227",
+            "type": "String"
+        },
+        "storageAccounts_preciprediagnosisstorage_name": {
+            "defaultValue": "preciprediagnosisstorage",
+            "type": "String"
+        },
+        "networkSecurityGroups_precip_rediagnosis_sg_name": {
+            "defaultValue": "precip_rediagnosis_sg",
+            "type": "String"
+        },
+        "workspaces_precip_rediagnosis_name": {
+            "defaultValue": "precip_rediagnosis",
+            "type": "String"
+        },
+        "registries_precipRediagnosisContainers_name": {
+            "defaultValue": "precipRediagnosisContainers",
+            "type": "String"
+        },
+        "actionGroups_Application_Insights_Smart_Detection_name": {
+            "defaultValue": "Application Insights Smart Detection",
+            "type": "String"
+        },
+        "smartdetectoralertrules_failure_anomalies___training7653333708_name": {
+            "defaultValue": "failure anomalies - training7653333708",
+            "type": "String"
+        },
+        "smartdetectoralertrules_failure_anomalies___preciprediagno1325391227_name": {
+            "defaultValue": "failure anomalies - preciprediagno1325391227",
+            "type": "String"
+        },
+        "components_training7653333708_externalid": {
+            "defaultValue": "/subscriptions/07efdc52-cd27-48ed-9443-3aad2b6b777b/resourceGroups/precip_rediagnosis/providers/microsoft.insights/components/training7653333708",
+            "type": "String"
+        }
+    },
+    "variables": {},
+    "resources": [
+        {
+            "type": "Microsoft.ContainerRegistry/registries",
+            "apiVersion": "2022-02-01-preview",
+            "name": "[parameters('registries_precipRediagnosisContainers_name')]",
+            "location": "uksouth",
+            "tags": {
+                "project": "precip_rediagnosis",
+                "owner": "Stephen Haddad",
+                "cost_code": "PDPRIS"
+            },
+            "sku": {
+                "name": "Standard",
+                "tier": "Standard"
+            },
+            "properties": {
+                "adminUserEnabled": true,
+                "policies": {
+                    "quarantinePolicy": {
+                        "status": "disabled"
+                    },
+                    "trustPolicy": {
+                        "type": "Notary",
+                        "status": "disabled"
+                    },
+                    "retentionPolicy": {
+                        "days": 7,
+                        "status": "disabled"
+                    },
+                    "exportPolicy": {
+                        "status": "enabled"
+                    },
+                    "azureADAuthenticationAsArmPolicy": {
+                        "status": "enabled"
+                    },
+                    "softDeletePolicy": {
+                        "retentionDays": 7,
+                        "status": "disabled"
+                    }
+                },
+                "encryption": {
+                    "status": "disabled"
+                },
+                "dataEndpointEnabled": false,
+                "publicNetworkAccess": "Enabled",
+                "networkRuleBypassOptions": "AzureServices",
+                "zoneRedundancy": "Disabled",
+                "anonymousPullEnabled": false
+            }
+        },
+        {
+            "type": "microsoft.insights/actionGroups",
+            "apiVersion": "2022-06-01",
+            "name": "[parameters('actionGroups_Application_Insights_Smart_Detection_name')]",
+            "location": "Global",
+            "properties": {
+                "groupShortName": "SmartDetect",
+                "enabled": true,
+                "emailReceivers": [],
+                "smsReceivers": [],
+                "webhookReceivers": [],
+                "eventHubReceivers": [],
+                "itsmReceivers": [],
+                "azureAppPushReceivers": [],
+                "automationRunbookReceivers": [],
+                "voiceReceivers": [],
+                "logicAppReceivers": [],
+                "azureFunctionReceivers": [],
+                "armRoleReceivers": [
+                    {
+                        "name": "Monitoring Contributor",
+                        "roleId": "749f88d5-cbae-40b8-bcfc-e573ddc772fa",
+                        "useCommonAlertSchema": true
+                    },
+                    {
+                        "name": "Monitoring Reader",
+                        "roleId": "43d0d8ad-25c7-4714-9337-8ba259a9fe05",
+                        "useCommonAlertSchema": true
+                    }
+                ]
+            }
+        },
+        {
+            "type": "microsoft.insights/components",
+            "apiVersion": "2020-02-02",
+            "name": "[parameters('components_preciprediagno1325391227_name')]",
+            "location": "uksouth",
+            "tags": {
+                "project": "precip_rediagnosis",
+                "owner": "Stephen Haddad",
+                "cost_code": "PDPRIS"
+            },
+            "kind": "web",
+            "properties": {
+                "Application_Type": "web",
+                "RetentionInDays": 90,
+                "IngestionMode": "ApplicationInsights",
+                "publicNetworkAccessForIngestion": "Enabled",
+                "publicNetworkAccessForQuery": "Enabled"
+            }
+        },
+        {
+            "type": "Microsoft.KeyVault/vaults",
+            "apiVersion": "2022-07-01",
+            "name": "[parameters('vaults_preciprediagnosiskeys_name')]",
+            "location": "uksouth",
+            "tags": {
+                "project": "precip_rediagnosis",
+                "owner": "Stephen Haddad",
+                "cost_code": "PDPRIS"
+            },
+            "properties": {
+                "sku": {
+                    "family": "A",
+                    "name": "standard"
+                },
+                "tenantId": "14fec308-b428-4380-b914-c1940f3210f1",
+                "accessPolicies": [
+                    {
+                        "tenantId": "14fec308-b428-4380-b914-c1940f3210f1",
+                        "objectId": "1d2d11fd-4abd-4365-835c-a579cb4033c6",
+                        "permissions": {
+                            "keys": [
+                                "all"
+                            ],
+                            "secrets": [
+                                "all"
+                            ],
+                            "certificates": [
+                                "all"
+                            ],
+                            "storage": []
+                        }
+                    }
+                ],
+                "enabledForDeployment": false,
+                "enableSoftDelete": true,
+                "vaultUri": "[concat('https://', parameters('vaults_preciprediagnosiskeys_name'), '.vault.azure.net/')]",
+                "provisioningState": "Succeeded",
+                "publicNetworkAccess": "Enabled"
+            }
+        },
+        {
+            "type": "Microsoft.Network/networkSecurityGroups",
+            "apiVersion": "2020-11-01",
+            "name": "[parameters('networkSecurityGroups_prd_nsg_name')]",
+            "location": "uksouth",
+            "properties": {
+                "securityRules": [
+                    {
+                        "name": "MyNsgRuleWithAsg",
+                        "properties": {
+                            "description": "Allow Internet to Dask on ports 8786,8787.",
+                            "protocol": "Tcp",
+                            "sourcePortRange": "*",
+                            "sourceAddressPrefix": "Internet",
+                            "destinationAddressPrefix": "*",
+                            "access": "Allow",
+                            "priority": 500,
+                            "direction": "Inbound",
+                            "sourcePortRanges": [],
+                            "destinationPortRanges": [
+                                "8786",
+                                "8787"
+                            ],
+                            "sourceAddressPrefixes": [],
+                            "destinationAddressPrefixes": []
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Network/networkSecurityGroups",
+            "apiVersion": "2020-11-01",
+            "name": "[parameters('networkSecurityGroups_precip_rediagnosis_sg_name')]",
+            "location": "uksouth",
+            "tags": {
+                "project": "precip_rediagnosis",
+                "owner": "Stephen Haddad"
+            },
+            "properties": {
+                "securityRules": []
+            }
+        },
+        {
+            "type": "Microsoft.Network/virtualNetworks",
+            "apiVersion": "2020-11-01",
+            "name": "[parameters('virtualNetworks_prd_vnet_name')]",
+            "location": "uksouth",
+            "properties": {
+                "addressSpace": {
+                    "addressPrefixes": [
+                        "10.0.0.0/16"
+                    ]
+                },
+                "dhcpOptions": {
+                    "dnsServers": []
+                },
+                "subnets": [
+                    {
+                        "name": "prd_subnet",
+                        "properties": {
+                            "addressPrefix": "10.0.0.0/24",
+                            "delegations": [],
+                            "privateEndpointNetworkPolicies": "Enabled",
+                            "privateLinkServiceNetworkPolicies": "Enabled"
+                        }
+                    }
+                ],
+                "virtualNetworkPeerings": [],
+                "enableDdosProtection": false
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2022-05-01",
+            "name": "[parameters('storageAccounts_preciprediagnosisstorage_name')]",
+            "location": "uksouth",
+            "tags": {
+                "project": "precip_rediagnosis",
+                "owner": "Stephen Haddad",
+                "cost_code": "PDPRIS"
+            },
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "kind": "StorageV2",
+            "properties": {
+                "minimumTlsVersion": "TLS1_0",
+                "allowBlobPublicAccess": true,
+                "isHnsEnabled": false,
+                "networkAcls": {
+                    "bypass": "AzureServices",
+                    "virtualNetworkRules": [],
+                    "ipRules": [],
+                    "defaultAction": "Allow"
+                },
+                "supportsHttpsTrafficOnly": true,
+                "encryption": {
+                    "services": {
+                        "file": {
+                            "keyType": "Account",
+                            "enabled": true
+                        },
+                        "blob": {
+                            "keyType": "Account",
+                            "enabled": true
+                        }
+                    },
+                    "keySource": "Microsoft.Storage"
+                },
+                "accessTier": "Hot"
+            }
+        },
+        {
+            "type": "microsoft.alertsmanagement/smartdetectoralertrules",
+            "apiVersion": "2021-04-01",
+            "name": "[parameters('smartdetectoralertrules_failure_anomalies___training7653333708_name')]",
+            "location": "global",
+            "dependsOn": [
+                "[resourceId('microsoft.insights/actionGroups', parameters('actionGroups_Application_Insights_Smart_Detection_name'))]"
+            ],
+            "properties": {
+                "description": "Failure Anomalies notifies you of an unusual rise in the rate of failed HTTP requests or dependency calls.",
+                "state": "Enabled",
+                "severity": "Sev3",
+                "frequency": "PT1M",
+                "detector": {
+                    "id": "FailureAnomaliesDetector"
+                },
+                "scope": [
+                    "[parameters('components_training7653333708_externalid')]"
+                ],
+                "actionGroups": {
+                    "groupIds": [
+                        "[resourceId('microsoft.insights/actionGroups', parameters('actionGroups_Application_Insights_Smart_Detection_name'))]"
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.ContainerRegistry/registries/taskRuns",
+            "apiVersion": "2019-06-01-preview",
+            "name": "[concat(parameters('registries_precipRediagnosisContainers_name'), '/0a9fbfe')]",
+            "location": "uksouth",
+            "dependsOn": [
+                "[resourceId('Microsoft.ContainerRegistry/registries', parameters('registries_precipRediagnosisContainers_name'))]"
+            ],
+            "properties": {
+                "runRequest": {
+                    "type": "EncodedTaskRunRequest",
+                    "encodedTaskContent": "c3RlcFRpbWVvdXQ6IDU0MDAKc3RlcHM6Ci0gYnVpbGQ6IC10IHt7LlJ1bi5SZWdpc3RyeX19L3t7LlZhbHVlcy5pbWFnZU5hbWV9fTpsYXRlc3QgIC10IHt7LlJ1bi5SZWdpc3RyeX19L2F6dXJlbWwvYXp1cmVtbF85ZjA3ODBkZmM2MjYxMDljOTIxMjliNzhkNTg1MjJjYzoxIC4gLWYgYXp1cmVtbC1lbnZpcm9ubWVudC1zZXR1cC9Eb2NrZXJmaWxlCi0gcHVzaDoKICAtIHt7LlJ1bi5SZWdpc3RyeX19L2F6dXJlbWwvYXp1cmVtbF85ZjA3ODBkZmM2MjYxMDljOTIxMjliNzhkNTg1MjJjYzoxCi0gcHVzaDoKICAtIHt7LlJ1bi5SZWdpc3RyeX19L3t7LlZhbHVlcy5pbWFnZU5hbWV9fQo=",
+                    "values": [
+                        {
+                            "name": "imageName",
+                            "value": "azureml/azureml_9f0780dfc626109c92129b78d58522cc",
+                            "isSecret": false
+                        }
+                    ],
+                    "timeout": 5400,
+                    "platform": {
+                        "os": "Linux",
+                        "architecture": "amd64"
+                    },
+                    "agentConfiguration": {
+                        "cpu": 2
+                    },
+                    "sourceLocation": "source/202209300000/c726da2e-8577-4b18-b6e4-c529d5e73459.tar.gz",
+                    "credentials": {
+                        "sourceRegistry": {
+                            "loginMode": "Default"
+                        },
+                        "customRegistries": {}
+                    },
+                    "isArchiveEnabled": false
+                }
+            }
+        },
+        {
+            "type": "Microsoft.ContainerRegistry/registries/taskRuns",
+            "apiVersion": "2019-06-01-preview",
+            "name": "[concat(parameters('registries_precipRediagnosisContainers_name'), '/1b1cd9d')]",
+            "location": "uksouth",
+            "dependsOn": [
+                "[resourceId('Microsoft.ContainerRegistry/registries', parameters('registries_precipRediagnosisContainers_name'))]"
+            ],
+            "properties": {
+                "runRequest": {
+                    "type": "EncodedTaskRunRequest",
+                    "encodedTaskContent": "c3RlcFRpbWVvdXQ6IDU0MDAKc3RlcHM6Ci0gYnVpbGQ6IC10IHt7LlJ1bi5SZWdpc3RyeX19L3t7LlZhbHVlcy5pbWFnZU5hbWV9fTpsYXRlc3QgIC10IHt7LlJ1bi5SZWdpc3RyeX19L2F6dXJlbWwvYXp1cmVtbF84OWI3NGZhYTQ0N2EzNDdkNzYzYTg5MDBlNTBhNjFhMjoxIC4gLWYgYXp1cmVtbC1lbnZpcm9ubWVudC1zZXR1cC9Eb2NrZXJmaWxlCi0gcHVzaDoKICAtIHt7LlJ1bi5SZWdpc3RyeX19L2F6dXJlbWwvYXp1cmVtbF84OWI3NGZhYTQ0N2EzNDdkNzYzYTg5MDBlNTBhNjFhMjoxCi0gcHVzaDoKICAtIHt7LlJ1bi5SZWdpc3RyeX19L3t7LlZhbHVlcy5pbWFnZU5hbWV9fQo=",
+                    "values": [
+                        {
+                            "name": "imageName",
+                            "value": "azureml/azureml_89b74faa447a347d763a8900e50a61a2",
+                            "isSecret": false
+                        }
+                    ],
+                    "timeout": 5400,
+                    "platform": {
+                        "os": "Linux",
+                        "architecture": "amd64"
+                    },
+                    "agentConfiguration": {
+                        "cpu": 2
+                    },
+                    "sourceLocation": "source/202209160000/a732a352-f0af-4212-82be-74cd20f2b07c.tar.gz",
+                    "credentials": {
+                        "sourceRegistry": {
+                            "loginMode": "Default"
+                        },
+                        "customRegistries": {}
+                    },
+                    "isArchiveEnabled": false
+                }
+            }
+        },
+        {
+            "type": "Microsoft.ContainerRegistry/registries/taskRuns",
+            "apiVersion": "2019-06-01-preview",
+            "name": "[concat(parameters('registries_precipRediagnosisContainers_name'), '/3a04ba4')]",
+            "location": "uksouth",
+            "dependsOn": [
+                "[resourceId('Microsoft.ContainerRegistry/registries', parameters('registries_precipRediagnosisContainers_name'))]"
+            ],
+            "properties": {
+                "runRequest": {
+                    "type": "EncodedTaskRunRequest",
+                    "encodedTaskContent": "c3RlcFRpbWVvdXQ6IDU0MDAKc3RlcHM6Ci0gYnVpbGQ6IC10IHt7LlJ1bi5SZWdpc3RyeX19L3t7LlZhbHVlcy5pbWFnZU5hbWV9fTpsYXRlc3QgIC10IHt7LlJ1bi5SZWdpc3RyeX19L2F6dXJlbWwvYXp1cmVtbF84OWI3NGZhYTQ0N2EzNDdkNzYzYTg5MDBlNTBhNjFhMjoyIC4gLWYgYXp1cmVtbC1lbnZpcm9ubWVudC1zZXR1cC9Eb2NrZXJmaWxlCi0gcHVzaDoKICAtIHt7LlJ1bi5SZWdpc3RyeX19L2F6dXJlbWwvYXp1cmVtbF84OWI3NGZhYTQ0N2EzNDdkNzYzYTg5MDBlNTBhNjFhMjoyCi0gcHVzaDoKICAtIHt7LlJ1bi5SZWdpc3RyeX19L3t7LlZhbHVlcy5pbWFnZU5hbWV9fQo=",
+                    "values": [
+                        {
+                            "name": "imageName",
+                            "value": "azureml/azureml_89b74faa447a347d763a8900e50a61a2",
+                            "isSecret": false
+                        }
+                    ],
+                    "timeout": 5400,
+                    "platform": {
+                        "os": "Linux",
+                        "architecture": "amd64"
+                    },
+                    "agentConfiguration": {
+                        "cpu": 2
+                    },
+                    "sourceLocation": "source/202209160000/7b6a7103-458f-4f3b-940f-dad0700a291e.tar.gz",
+                    "credentials": {
+                        "sourceRegistry": {
+                            "loginMode": "Default"
+                        },
+                        "customRegistries": {}
+                    },
+                    "isArchiveEnabled": false
+                }
+            }
+        },
+        {
+            "type": "Microsoft.ContainerRegistry/registries/taskRuns",
+            "apiVersion": "2019-06-01-preview",
+            "name": "[concat(parameters('registries_precipRediagnosisContainers_name'), '/3d58d37')]",
+            "location": "uksouth",
+            "dependsOn": [
+                "[resourceId('Microsoft.ContainerRegistry/registries', parameters('registries_precipRediagnosisContainers_name'))]"
+            ],
+            "properties": {
+                "runRequest": {
+                    "type": "EncodedTaskRunRequest",
+                    "encodedTaskContent": "c3RlcFRpbWVvdXQ6IDU0MDAKc3RlcHM6Ci0gYnVpbGQ6IC10IHt7LlJ1bi5SZWdpc3RyeX19L3t7LlZhbHVlcy5pbWFnZU5hbWV9fTpsYXRlc3QgIC10IHt7LlJ1bi5SZWdpc3RyeX19L2F6dXJlbWwvYXp1cmVtbF84OWI3NGZhYTQ0N2EzNDdkNzYzYTg5MDBlNTBhNjFhMjozIC4gLWYgYXp1cmVtbC1lbnZpcm9ubWVudC1zZXR1cC9Eb2NrZXJmaWxlCi0gcHVzaDoKICAtIHt7LlJ1bi5SZWdpc3RyeX19L2F6dXJlbWwvYXp1cmVtbF84OWI3NGZhYTQ0N2EzNDdkNzYzYTg5MDBlNTBhNjFhMjozCi0gcHVzaDoKICAtIHt7LlJ1bi5SZWdpc3RyeX19L3t7LlZhbHVlcy5pbWFnZU5hbWV9fQo=",
+                    "values": [
+                        {
+                            "name": "imageName",
+                            "value": "azureml/azureml_89b74faa447a347d763a8900e50a61a2",
+                            "isSecret": false
+                        }
+                    ],
+                    "timeout": 5400,
+                    "platform": {
+                        "os": "Linux",
+                        "architecture": "amd64"
+                    },
+                    "agentConfiguration": {
+                        "cpu": 2
+                    },
+                    "sourceLocation": "source/202209220000/3da9cf54-f06c-44c6-993a-3758aac89b13.tar.gz",
+                    "credentials": {
+                        "sourceRegistry": {
+                            "loginMode": "Default"
+                        },
+                        "customRegistries": {}
+                    },
+                    "isArchiveEnabled": false
+                }
+            }
+        },
+        {
+            "type": "Microsoft.ContainerRegistry/registries/taskRuns",
+            "apiVersion": "2019-06-01-preview",
+            "name": "[concat(parameters('registries_precipRediagnosisContainers_name'), '/4000699')]",
+            "location": "uksouth",
+            "dependsOn": [
+                "[resourceId('Microsoft.ContainerRegistry/registries', parameters('registries_precipRediagnosisContainers_name'))]"
+            ],
+            "properties": {
+                "runRequest": {
+                    "type": "EncodedTaskRunRequest",
+                    "encodedTaskContent": "c3RlcFRpbWVvdXQ6IDU0MDAKc3RlcHM6Ci0gYnVpbGQ6IC10IHt7LlJ1bi5SZWdpc3RyeX19L3t7LlZhbHVlcy5pbWFnZU5hbWV9fTpsYXRlc3QgIC10IHt7LlJ1bi5SZWdpc3RyeX19L2F6dXJlbWwvYXp1cmVtbF9jOTRkYWIxNTk2OTIxY2M3MGU4ZWU4ZDM4M2ViOTI0YjoxIC4gLWYgYXp1cmVtbC1lbnZpcm9ubWVudC1zZXR1cC9Eb2NrZXJmaWxlCi0gcHVzaDoKICAtIHt7LlJ1bi5SZWdpc3RyeX19L2F6dXJlbWwvYXp1cmVtbF9jOTRkYWIxNTk2OTIxY2M3MGU4ZWU4ZDM4M2ViOTI0YjoxCi0gcHVzaDoKICAtIHt7LlJ1bi5SZWdpc3RyeX19L3t7LlZhbHVlcy5pbWFnZU5hbWV9fQo=",
+                    "values": [
+                        {
+                            "name": "imageName",
+                            "value": "azureml/azureml_c94dab1596921cc70e8ee8d383eb924b",
+                            "isSecret": false
+                        }
+                    ],
+                    "timeout": 5400,
+                    "platform": {
+                        "os": "Linux",
+                        "architecture": "amd64"
+                    },
+                    "agentConfiguration": {
+                        "cpu": 2
+                    },
+                    "sourceLocation": "source/202210050000/0b86ba07-652e-484e-b58c-45492bd0d70d.tar.gz",
+                    "credentials": {
+                        "sourceRegistry": {
+                            "loginMode": "Default"
+                        },
+                        "customRegistries": {}
+                    },
+                    "isArchiveEnabled": false
+                }
+            }
+        },
+        {
+            "type": "Microsoft.ContainerRegistry/registries/taskRuns",
+            "apiVersion": "2019-06-01-preview",
+            "name": "[concat(parameters('registries_precipRediagnosisContainers_name'), '/4bc5058')]",
+            "location": "uksouth",
+            "dependsOn": [
+                "[resourceId('Microsoft.ContainerRegistry/registries', parameters('registries_precipRediagnosisContainers_name'))]"
+            ],
+            "properties": {
+                "runRequest": {
+                    "type": "EncodedTaskRunRequest",
+                    "encodedTaskContent": "c3RlcFRpbWVvdXQ6IDU0MDAKc3RlcHM6Ci0gYnVpbGQ6IC10IHt7LlJ1bi5SZWdpc3RyeX19L3t7LlZhbHVlcy5pbWFnZU5hbWV9fTpsYXRlc3QgIC10IHt7LlJ1bi5SZWdpc3RyeX19L2F6dXJlbWwvYXp1cmVtbF8xNWFkN2RhODgzMTY3MTZjZjU2ZmViYTkzZTZiNDIxNToxIC4gLWYgYXp1cmVtbC1lbnZpcm9ubWVudC1zZXR1cC9Eb2NrZXJmaWxlCi0gcHVzaDoKICAtIHt7LlJ1bi5SZWdpc3RyeX19L2F6dXJlbWwvYXp1cmVtbF8xNWFkN2RhODgzMTY3MTZjZjU2ZmViYTkzZTZiNDIxNToxCi0gcHVzaDoKICAtIHt7LlJ1bi5SZWdpc3RyeX19L3t7LlZhbHVlcy5pbWFnZU5hbWV9fQo=",
+                    "values": [
+                        {
+                            "name": "imageName",
+                            "value": "azureml/azureml_15ad7da88316716cf56feba93e6b4215",
+                            "isSecret": false
+                        }
+                    ],
+                    "timeout": 5400,
+                    "platform": {
+                        "os": "Linux",
+                        "architecture": "amd64"
+                    },
+                    "agentConfiguration": {
+                        "cpu": 2
+                    },
+                    "sourceLocation": "source/202209290000/04af1a2f-a16d-4976-99ad-2a98783949b4.tar.gz",
+                    "credentials": {
+                        "sourceRegistry": {
+                            "loginMode": "Default"
+                        },
+                        "customRegistries": {}
+                    },
+                    "isArchiveEnabled": false
+                }
+            }
+        },
+        {
+            "type": "Microsoft.ContainerRegistry/registries/taskRuns",
+            "apiVersion": "2019-06-01-preview",
+            "name": "[concat(parameters('registries_precipRediagnosisContainers_name'), '/838d551')]",
+            "location": "uksouth",
+            "dependsOn": [
+                "[resourceId('Microsoft.ContainerRegistry/registries', parameters('registries_precipRediagnosisContainers_name'))]"
+            ],
+            "properties": {
+                "runRequest": {
+                    "type": "EncodedTaskRunRequest",
+                    "encodedTaskContent": "c3RlcFRpbWVvdXQ6IDU0MDAKc3RlcHM6Ci0gYnVpbGQ6IC10IHt7LlJ1bi5SZWdpc3RyeX19L3t7LlZhbHVlcy5pbWFnZU5hbWV9fTpsYXRlc3QgIC10IHt7LlJ1bi5SZWdpc3RyeX19L2F6dXJlbWwvYXp1cmVtbF9hZmIyNTlhOWQ4YmIyYzk4NTFiMTg0YjQ3ZjE5NGIzODoxIC4gLWYgYXp1cmVtbC1lbnZpcm9ubWVudC1zZXR1cC9Eb2NrZXJmaWxlCi0gcHVzaDoKICAtIHt7LlJ1bi5SZWdpc3RyeX19L2F6dXJlbWwvYXp1cmVtbF9hZmIyNTlhOWQ4YmIyYzk4NTFiMTg0YjQ3ZjE5NGIzODoxCi0gcHVzaDoKICAtIHt7LlJ1bi5SZWdpc3RyeX19L3t7LlZhbHVlcy5pbWFnZU5hbWV9fQo=",
+                    "values": [
+                        {
+                            "name": "imageName",
+                            "value": "azureml/azureml_afb259a9d8bb2c9851b184b47f194b38",
+                            "isSecret": false
+                        }
+                    ],
+                    "timeout": 5400,
+                    "platform": {
+                        "os": "Linux",
+                        "architecture": "amd64"
+                    },
+                    "agentConfiguration": {
+                        "cpu": 2
+                    },
+                    "sourceLocation": "source/202209160000/e28146f8-731b-428c-88dd-6ed4e8a5a8f5.tar.gz",
+                    "credentials": {
+                        "sourceRegistry": {
+                            "loginMode": "Default"
+                        },
+                        "customRegistries": {}
+                    },
+                    "isArchiveEnabled": false
+                }
+            }
+        },
+        {
+            "type": "Microsoft.ContainerRegistry/registries/taskRuns",
+            "apiVersion": "2019-06-01-preview",
+            "name": "[concat(parameters('registries_precipRediagnosisContainers_name'), '/87b4904')]",
+            "location": "uksouth",
+            "dependsOn": [
+                "[resourceId('Microsoft.ContainerRegistry/registries', parameters('registries_precipRediagnosisContainers_name'))]"
+            ],
+            "properties": {
+                "runRequest": {
+                    "type": "EncodedTaskRunRequest",
+                    "encodedTaskContent": "c3RlcFRpbWVvdXQ6IDU0MDAKc3RlcHM6Ci0gYnVpbGQ6IC10IHt7LlJ1bi5SZWdpc3RyeX19L3t7LlZhbHVlcy5pbWFnZU5hbWV9fTpsYXRlc3QgIC10IHt7LlJ1bi5SZWdpc3RyeX19L2F6dXJlbWwvYXp1cmVtbF85ZWZhZDE1ZTQ0YTYwNDgyYzczYmExYjNmN2JiNDViODoxIC4gLWYgYXp1cmVtbC1lbnZpcm9ubWVudC1zZXR1cC9Eb2NrZXJmaWxlCi0gcHVzaDoKICAtIHt7LlJ1bi5SZWdpc3RyeX19L2F6dXJlbWwvYXp1cmVtbF85ZWZhZDE1ZTQ0YTYwNDgyYzczYmExYjNmN2JiNDViODoxCi0gcHVzaDoKICAtIHt7LlJ1bi5SZWdpc3RyeX19L3t7LlZhbHVlcy5pbWFnZU5hbWV9fQo=",
+                    "values": [
+                        {
+                            "name": "imageName",
+                            "value": "azureml/azureml_9efad15e44a60482c73ba1b3f7bb45b8",
+                            "isSecret": false
+                        }
+                    ],
+                    "timeout": 5400,
+                    "platform": {
+                        "os": "Linux",
+                        "architecture": "amd64"
+                    },
+                    "agentConfiguration": {
+                        "cpu": 2
+                    },
+                    "sourceLocation": "source/202210030000/b5439237-ad7c-4ba2-96e8-f7f00fb098a0.tar.gz",
+                    "credentials": {
+                        "sourceRegistry": {
+                            "loginMode": "Default"
+                        },
+                        "customRegistries": {}
+                    },
+                    "isArchiveEnabled": false
+                }
+            }
+        },
+        {
+            "type": "Microsoft.ContainerRegistry/registries/taskRuns",
+            "apiVersion": "2019-06-01-preview",
+            "name": "[concat(parameters('registries_precipRediagnosisContainers_name'), '/d1a6666')]",
+            "location": "uksouth",
+            "dependsOn": [
+                "[resourceId('Microsoft.ContainerRegistry/registries', parameters('registries_precipRediagnosisContainers_name'))]"
+            ],
+            "properties": {
+                "runRequest": {
+                    "type": "EncodedTaskRunRequest",
+                    "encodedTaskContent": "c3RlcFRpbWVvdXQ6IDU0MDAKc3RlcHM6Ci0gYnVpbGQ6IC10IHt7LlJ1bi5SZWdpc3RyeX19L3t7LlZhbHVlcy5pbWFnZU5hbWV9fTpsYXRlc3QgIC10IHt7LlJ1bi5SZWdpc3RyeX19L2F6dXJlbWwvYXp1cmVtbF9hZmIyNTlhOWQ4YmIyYzk4NTFiMTg0YjQ3ZjE5NGIzODoyIC4gLWYgYXp1cmVtbC1lbnZpcm9ubWVudC1zZXR1cC9Eb2NrZXJmaWxlCi0gcHVzaDoKICAtIHt7LlJ1bi5SZWdpc3RyeX19L2F6dXJlbWwvYXp1cmVtbF9hZmIyNTlhOWQ4YmIyYzk4NTFiMTg0YjQ3ZjE5NGIzODoyCi0gcHVzaDoKICAtIHt7LlJ1bi5SZWdpc3RyeX19L3t7LlZhbHVlcy5pbWFnZU5hbWV9fQo=",
+                    "values": [
+                        {
+                            "name": "imageName",
+                            "value": "azureml/azureml_afb259a9d8bb2c9851b184b47f194b38",
+                            "isSecret": false
+                        }
+                    ],
+                    "timeout": 5400,
+                    "platform": {
+                        "os": "Linux",
+                        "architecture": "amd64"
+                    },
+                    "agentConfiguration": {
+                        "cpu": 2
+                    },
+                    "sourceLocation": "source/202209160000/8896d53f-0a60-40c3-8497-f07de2b3151c.tar.gz",
+                    "credentials": {
+                        "sourceRegistry": {
+                            "loginMode": "Default"
+                        },
+                        "customRegistries": {}
+                    },
+                    "isArchiveEnabled": false
+                }
+            }
+        },
+        {
+            "type": "Microsoft.ContainerRegistry/registries/taskRuns",
+            "apiVersion": "2019-06-01-preview",
+            "name": "[concat(parameters('registries_precipRediagnosisContainers_name'), '/dc2740b')]",
+            "location": "uksouth",
+            "dependsOn": [
+                "[resourceId('Microsoft.ContainerRegistry/registries', parameters('registries_precipRediagnosisContainers_name'))]"
+            ],
+            "properties": {
+                "runRequest": {
+                    "type": "EncodedTaskRunRequest",
+                    "encodedTaskContent": "c3RlcFRpbWVvdXQ6IDU0MDAKc3RlcHM6Ci0gYnVpbGQ6IC10IHt7LlJ1bi5SZWdpc3RyeX19L3t7LlZhbHVlcy5pbWFnZU5hbWV9fTpsYXRlc3QgIC10IHt7LlJ1bi5SZWdpc3RyeX19L2F6dXJlbWwvYXp1cmVtbF82NzczOTQzMjUxNzg2YjFiZTRhYWUyY2Q0ZTQ0MDU4YToxIC4gLWYgYXp1cmVtbC1lbnZpcm9ubWVudC1zZXR1cC9Eb2NrZXJmaWxlCi0gcHVzaDoKICAtIHt7LlJ1bi5SZWdpc3RyeX19L2F6dXJlbWwvYXp1cmVtbF82NzczOTQzMjUxNzg2YjFiZTRhYWUyY2Q0ZTQ0MDU4YToxCi0gcHVzaDoKICAtIHt7LlJ1bi5SZWdpc3RyeX19L3t7LlZhbHVlcy5pbWFnZU5hbWV9fQo=",
+                    "values": [
+                        {
+                            "name": "imageName",
+                            "value": "azureml/azureml_6773943251786b1be4aae2cd4e44058a",
+                            "isSecret": false
+                        }
+                    ],
+                    "timeout": 5400,
+                    "platform": {
+                        "os": "Linux",
+                        "architecture": "amd64"
+                    },
+                    "agentConfiguration": {
+                        "cpu": 2
+                    },
+                    "sourceLocation": "source/202210030000/33ecf478-0637-404a-bca8-fb4822a6e367.tar.gz",
+                    "credentials": {
+                        "sourceRegistry": {
+                            "loginMode": "Default"
+                        },
+                        "customRegistries": {}
+                    },
+                    "isArchiveEnabled": false
+                }
+            }
+        },
+        {
+            "type": "Microsoft.ContainerRegistry/registries/taskRuns",
+            "apiVersion": "2019-06-01-preview",
+            "name": "[concat(parameters('registries_precipRediagnosisContainers_name'), '/dd487b0')]",
+            "location": "uksouth",
+            "dependsOn": [
+                "[resourceId('Microsoft.ContainerRegistry/registries', parameters('registries_precipRediagnosisContainers_name'))]"
+            ],
+            "properties": {
+                "runRequest": {
+                    "type": "EncodedTaskRunRequest",
+                    "encodedTaskContent": "c3RlcFRpbWVvdXQ6IDU0MDAKc3RlcHM6Ci0gYnVpbGQ6IC10IHt7LlJ1bi5SZWdpc3RyeX19L3t7LlZhbHVlcy5pbWFnZU5hbWV9fTpsYXRlc3QgIC10IHt7LlJ1bi5SZWdpc3RyeX19L2F6dXJlbWwvYXp1cmVtbF85ZTYzOGI5NjUwNWQ4ODAwNTdkZTM2NGI3MWI1OTNlNzoxIC4gLWYgYXp1cmVtbC1lbnZpcm9ubWVudC1zZXR1cC9Eb2NrZXJmaWxlCi0gcHVzaDoKICAtIHt7LlJ1bi5SZWdpc3RyeX19L2F6dXJlbWwvYXp1cmVtbF85ZTYzOGI5NjUwNWQ4ODAwNTdkZTM2NGI3MWI1OTNlNzoxCi0gcHVzaDoKICAtIHt7LlJ1bi5SZWdpc3RyeX19L3t7LlZhbHVlcy5pbWFnZU5hbWV9fQo=",
+                    "values": [
+                        {
+                            "name": "imageName",
+                            "value": "azureml/azureml_9e638b96505d880057de364b71b593e7",
+                            "isSecret": false
+                        }
+                    ],
+                    "timeout": 5400,
+                    "platform": {
+                        "os": "Linux",
+                        "architecture": "amd64"
+                    },
+                    "agentConfiguration": {
+                        "cpu": 2
+                    },
+                    "sourceLocation": "source/202209280000/35a12fe7-2dd8-4d23-a808-b69420d1deb2.tar.gz",
+                    "credentials": {
+                        "sourceRegistry": {
+                            "loginMode": "Default"
+                        },
+                        "customRegistries": {}
+                    },
+                    "isArchiveEnabled": false
+                }
+            }
+        },
+        {
+            "type": "microsoft.insights/components/ProactiveDetectionConfigs",
+            "apiVersion": "2018-05-01-preview",
+            "name": "[concat(parameters('components_preciprediagno1325391227_name'), '/degradationindependencyduration')]",
+            "location": "uksouth",
+            "dependsOn": [
+                "[resourceId('microsoft.insights/components', parameters('components_preciprediagno1325391227_name'))]"
+            ],
+            "properties": {
+                "ruleDefinitions": {
+                    "Name": "degradationindependencyduration",
+                    "DisplayName": "Degradation in dependency duration",
+                    "Description": "Smart Detection rules notify you of performance anomaly issues.",
+                    "HelpUrl": "https://docs.microsoft.com/en-us/azure/application-insights/app-insights-proactive-performance-diagnostics",
+                    "IsHidden": false,
+                    "IsEnabledByDefault": true,
+                    "IsInPreview": false,
+                    "SupportsEmailNotifications": true
+                },
+                "enabled": true,
+                "sendEmailsToSubscriptionOwners": true,
+                "customEmails": []
+            }
+        },
+        {
+            "type": "microsoft.insights/components/ProactiveDetectionConfigs",
+            "apiVersion": "2018-05-01-preview",
+            "name": "[concat(parameters('components_preciprediagno1325391227_name'), '/degradationinserverresponsetime')]",
+            "location": "uksouth",
+            "dependsOn": [
+                "[resourceId('microsoft.insights/components', parameters('components_preciprediagno1325391227_name'))]"
+            ],
+            "properties": {
+                "ruleDefinitions": {
+                    "Name": "degradationinserverresponsetime",
+                    "DisplayName": "Degradation in server response time",
+                    "Description": "Smart Detection rules notify you of performance anomaly issues.",
+                    "HelpUrl": "https://docs.microsoft.com/en-us/azure/application-insights/app-insights-proactive-performance-diagnostics",
+                    "IsHidden": false,
+                    "IsEnabledByDefault": true,
+                    "IsInPreview": false,
+                    "SupportsEmailNotifications": true
+                },
+                "enabled": true,
+                "sendEmailsToSubscriptionOwners": true,
+                "customEmails": []
+            }
+        },
+        {
+            "type": "microsoft.insights/components/ProactiveDetectionConfigs",
+            "apiVersion": "2018-05-01-preview",
+            "name": "[concat(parameters('components_preciprediagno1325391227_name'), '/digestMailConfiguration')]",
+            "location": "uksouth",
+            "dependsOn": [
+                "[resourceId('microsoft.insights/components', parameters('components_preciprediagno1325391227_name'))]"
+            ],
+            "properties": {
+                "ruleDefinitions": {
+                    "Name": "digestMailConfiguration",
+                    "DisplayName": "Digest Mail Configuration",
+                    "Description": "This rule describes the digest mail preferences",
+                    "HelpUrl": "www.homail.com",
+                    "IsHidden": true,
+                    "IsEnabledByDefault": true,
+                    "IsInPreview": false,
+                    "SupportsEmailNotifications": true
+                },
+                "enabled": true,
+                "sendEmailsToSubscriptionOwners": true,
+                "customEmails": []
+            }
+        },
+        {
+            "type": "microsoft.insights/components/ProactiveDetectionConfigs",
+            "apiVersion": "2018-05-01-preview",
+            "name": "[concat(parameters('components_preciprediagno1325391227_name'), '/extension_billingdatavolumedailyspikeextension')]",
+            "location": "uksouth",
+            "dependsOn": [
+                "[resourceId('microsoft.insights/components', parameters('components_preciprediagno1325391227_name'))]"
+            ],
+            "properties": {
+                "ruleDefinitions": {
+                    "Name": "extension_billingdatavolumedailyspikeextension",
+                    "DisplayName": "Abnormal rise in daily data volume (preview)",
+                    "Description": "This detection rule automatically analyzes the billing data generated by your application, and can warn you about an unusual increase in your application's billing costs",
+                    "HelpUrl": "https://github.com/Microsoft/ApplicationInsights-Home/tree/master/SmartDetection/billing-data-volume-daily-spike.md",
+                    "IsHidden": false,
+                    "IsEnabledByDefault": true,
+                    "IsInPreview": true,
+                    "SupportsEmailNotifications": false
+                },
+                "enabled": true,
+                "sendEmailsToSubscriptionOwners": true,
+                "customEmails": []
+            }
+        },
+        {
+            "type": "microsoft.insights/components/ProactiveDetectionConfigs",
+            "apiVersion": "2018-05-01-preview",
+            "name": "[concat(parameters('components_preciprediagno1325391227_name'), '/extension_canaryextension')]",
+            "location": "uksouth",
+            "dependsOn": [
+                "[resourceId('microsoft.insights/components', parameters('components_preciprediagno1325391227_name'))]"
+            ],
+            "properties": {
+                "ruleDefinitions": {
+                    "Name": "extension_canaryextension",
+                    "DisplayName": "Canary extension",
+                    "Description": "Canary extension",
+                    "HelpUrl": "https://github.com/Microsoft/ApplicationInsights-Home/blob/master/SmartDetection/",
+                    "IsHidden": true,
+                    "IsEnabledByDefault": true,
+                    "IsInPreview": true,
+                    "SupportsEmailNotifications": false
+                },
+                "enabled": true,
+                "sendEmailsToSubscriptionOwners": true,
+                "customEmails": []
+            }
+        },
+        {
+            "type": "microsoft.insights/components/ProactiveDetectionConfigs",
+            "apiVersion": "2018-05-01-preview",
+            "name": "[concat(parameters('components_preciprediagno1325391227_name'), '/extension_exceptionchangeextension')]",
+            "location": "uksouth",
+            "dependsOn": [
+                "[resourceId('microsoft.insights/components', parameters('components_preciprediagno1325391227_name'))]"
+            ],
+            "properties": {
+                "ruleDefinitions": {
+                    "Name": "extension_exceptionchangeextension",
+                    "DisplayName": "Abnormal rise in exception volume (preview)",
+                    "Description": "This detection rule automatically analyzes the exceptions thrown in your application, and can warn you about unusual patterns in your exception telemetry.",
+                    "HelpUrl": "https://github.com/Microsoft/ApplicationInsights-Home/blob/master/SmartDetection/abnormal-rise-in-exception-volume.md",
+                    "IsHidden": false,
+                    "IsEnabledByDefault": true,
+                    "IsInPreview": true,
+                    "SupportsEmailNotifications": false
+                },
+                "enabled": true,
+                "sendEmailsToSubscriptionOwners": true,
+                "customEmails": []
+            }
+        },
+        {
+            "type": "microsoft.insights/components/ProactiveDetectionConfigs",
+            "apiVersion": "2018-05-01-preview",
+            "name": "[concat(parameters('components_preciprediagno1325391227_name'), '/extension_memoryleakextension')]",
+            "location": "uksouth",
+            "dependsOn": [
+                "[resourceId('microsoft.insights/components', parameters('components_preciprediagno1325391227_name'))]"
+            ],
+            "properties": {
+                "ruleDefinitions": {
+                    "Name": "extension_memoryleakextension",
+                    "DisplayName": "Potential memory leak detected (preview)",
+                    "Description": "This detection rule automatically analyzes the memory consumption of each process in your application, and can warn you about potential memory leaks or increased memory consumption.",
+                    "HelpUrl": "https://github.com/Microsoft/ApplicationInsights-Home/tree/master/SmartDetection/memory-leak.md",
+                    "IsHidden": false,
+                    "IsEnabledByDefault": true,
+                    "IsInPreview": true,
+                    "SupportsEmailNotifications": false
+                },
+                "enabled": true,
+                "sendEmailsToSubscriptionOwners": true,
+                "customEmails": []
+            }
+        },
+        {
+            "type": "microsoft.insights/components/ProactiveDetectionConfigs",
+            "apiVersion": "2018-05-01-preview",
+            "name": "[concat(parameters('components_preciprediagno1325391227_name'), '/extension_securityextensionspackage')]",
+            "location": "uksouth",
+            "dependsOn": [
+                "[resourceId('microsoft.insights/components', parameters('components_preciprediagno1325391227_name'))]"
+            ],
+            "properties": {
+                "ruleDefinitions": {
+                    "Name": "extension_securityextensionspackage",
+                    "DisplayName": "Potential security issue detected (preview)",
+                    "Description": "This detection rule automatically analyzes the telemetry generated by your application and detects potential security issues.",
+                    "HelpUrl": "https://github.com/Microsoft/ApplicationInsights-Home/blob/master/SmartDetection/application-security-detection-pack.md",
+                    "IsHidden": false,
+                    "IsEnabledByDefault": true,
+                    "IsInPreview": true,
+                    "SupportsEmailNotifications": false
+                },
+                "enabled": true,
+                "sendEmailsToSubscriptionOwners": true,
+                "customEmails": []
+            }
+        },
+        {
+            "type": "microsoft.insights/components/ProactiveDetectionConfigs",
+            "apiVersion": "2018-05-01-preview",
+            "name": "[concat(parameters('components_preciprediagno1325391227_name'), '/extension_traceseveritydetector')]",
+            "location": "uksouth",
+            "dependsOn": [
+                "[resourceId('microsoft.insights/components', parameters('components_preciprediagno1325391227_name'))]"
+            ],
+            "properties": {
+                "ruleDefinitions": {
+                    "Name": "extension_traceseveritydetector",
+                    "DisplayName": "Degradation in trace severity ratio (preview)",
+                    "Description": "This detection rule automatically analyzes the trace logs emitted from your application, and can warn you about unusual patterns in the severity of your trace telemetry.",
+                    "HelpUrl": "https://github.com/Microsoft/ApplicationInsights-Home/blob/master/SmartDetection/degradation-in-trace-severity-ratio.md",
+                    "IsHidden": false,
+                    "IsEnabledByDefault": true,
+                    "IsInPreview": true,
+                    "SupportsEmailNotifications": false
+                },
+                "enabled": true,
+                "sendEmailsToSubscriptionOwners": true,
+                "customEmails": []
+            }
+        },
+        {
+            "type": "microsoft.insights/components/ProactiveDetectionConfigs",
+            "apiVersion": "2018-05-01-preview",
+            "name": "[concat(parameters('components_preciprediagno1325391227_name'), '/longdependencyduration')]",
+            "location": "uksouth",
+            "dependsOn": [
+                "[resourceId('microsoft.insights/components', parameters('components_preciprediagno1325391227_name'))]"
+            ],
+            "properties": {
+                "ruleDefinitions": {
+                    "Name": "longdependencyduration",
+                    "DisplayName": "Long dependency duration",
+                    "Description": "Smart Detection rules notify you of performance anomaly issues.",
+                    "HelpUrl": "https://docs.microsoft.com/en-us/azure/application-insights/app-insights-proactive-performance-diagnostics",
+                    "IsHidden": false,
+                    "IsEnabledByDefault": true,
+                    "IsInPreview": false,
+                    "SupportsEmailNotifications": true
+                },
+                "enabled": true,
+                "sendEmailsToSubscriptionOwners": true,
+                "customEmails": []
+            }
+        },
+        {
+            "type": "microsoft.insights/components/ProactiveDetectionConfigs",
+            "apiVersion": "2018-05-01-preview",
+            "name": "[concat(parameters('components_preciprediagno1325391227_name'), '/migrationToAlertRulesCompleted')]",
+            "location": "uksouth",
+            "dependsOn": [
+                "[resourceId('microsoft.insights/components', parameters('components_preciprediagno1325391227_name'))]"
+            ],
+            "properties": {
+                "ruleDefinitions": {
+                    "Name": "migrationToAlertRulesCompleted",
+                    "DisplayName": "Migration To Alert Rules Completed",
+                    "Description": "A configuration that controls the migration state of Smart Detection to Smart Alerts",
+                    "HelpUrl": "https://docs.microsoft.com/en-us/azure/application-insights/app-insights-proactive-performance-diagnostics",
+                    "IsHidden": true,
+                    "IsEnabledByDefault": false,
+                    "IsInPreview": true,
+                    "SupportsEmailNotifications": false
+                },
+                "enabled": false,
+                "sendEmailsToSubscriptionOwners": true,
+                "customEmails": []
+            }
+        },
+        {
+            "type": "microsoft.insights/components/ProactiveDetectionConfigs",
+            "apiVersion": "2018-05-01-preview",
+            "name": "[concat(parameters('components_preciprediagno1325391227_name'), '/slowpageloadtime')]",
+            "location": "uksouth",
+            "dependsOn": [
+                "[resourceId('microsoft.insights/components', parameters('components_preciprediagno1325391227_name'))]"
+            ],
+            "properties": {
+                "ruleDefinitions": {
+                    "Name": "slowpageloadtime",
+                    "DisplayName": "Slow page load time",
+                    "Description": "Smart Detection rules notify you of performance anomaly issues.",
+                    "HelpUrl": "https://docs.microsoft.com/en-us/azure/application-insights/app-insights-proactive-performance-diagnostics",
+                    "IsHidden": false,
+                    "IsEnabledByDefault": true,
+                    "IsInPreview": false,
+                    "SupportsEmailNotifications": true
+                },
+                "enabled": true,
+                "sendEmailsToSubscriptionOwners": true,
+                "customEmails": []
+            }
+        },
+        {
+            "type": "microsoft.insights/components/ProactiveDetectionConfigs",
+            "apiVersion": "2018-05-01-preview",
+            "name": "[concat(parameters('components_preciprediagno1325391227_name'), '/slowserverresponsetime')]",
+            "location": "uksouth",
+            "dependsOn": [
+                "[resourceId('microsoft.insights/components', parameters('components_preciprediagno1325391227_name'))]"
+            ],
+            "properties": {
+                "ruleDefinitions": {
+                    "Name": "slowserverresponsetime",
+                    "DisplayName": "Slow server response time",
+                    "Description": "Smart Detection rules notify you of performance anomaly issues.",
+                    "HelpUrl": "https://docs.microsoft.com/en-us/azure/application-insights/app-insights-proactive-performance-diagnostics",
+                    "IsHidden": false,
+                    "IsEnabledByDefault": true,
+                    "IsInPreview": false,
+                    "SupportsEmailNotifications": true
+                },
+                "enabled": true,
+                "sendEmailsToSubscriptionOwners": true,
+                "customEmails": []
+            }
+        },
+        {
+            "type": "Microsoft.KeyVault/vaults/secrets",
+            "apiVersion": "2022-07-01",
+            "name": "[concat(parameters('vaults_preciprediagnosiskeys_name'), '/57546dc9-9763-4025-831d-c19991c81540-47QbfVHYM9jnA9B3IC3qlntwaofglIosAqbr7x-9Vig')]",
+            "location": "uksouth",
+            "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', parameters('vaults_preciprediagnosiskeys_name'))]"
+            ],
+            "properties": {
+                "attributes": {
+                    "enabled": true,
+                    "exp": 4795069482
+                }
+            }
+        },
+        {
+            "type": "Microsoft.KeyVault/vaults/secrets",
+            "apiVersion": "2022-07-01",
+            "name": "[concat(parameters('vaults_preciprediagnosiskeys_name'), '/57546dc9-9763-4025-831d-c19991c81540-BBQXsirBA-a-45pdj-OX1My8v5Gpe9xOf29xekoK4k0')]",
+            "location": "uksouth",
+            "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', parameters('vaults_preciprediagnosiskeys_name'))]"
+            ],
+            "properties": {
+                "contentType": "application/vnd.ms-AzureML-StorageKey",
+                "attributes": {
+                    "enabled": true,
+                    "exp": 4804221594
+                }
+            }
+        },
+        {
+            "type": "Microsoft.KeyVault/vaults/secrets",
+            "apiVersion": "2022-07-01",
+            "name": "[concat(parameters('vaults_preciprediagnosiskeys_name'), '/57546dc9-9763-4025-831d-c19991c81540-feH-6CoR0i5InpyaiIeO7ESE-us9xAS6Pwupr3HnelU')]",
+            "location": "uksouth",
+            "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', parameters('vaults_preciprediagnosiskeys_name'))]"
+            ],
+            "properties": {
+                "contentType": "application/vnd.ms-StorageAccountAccessKey",
+                "attributes": {
+                    "enabled": true,
+                    "exp": 1726388152
+                }
+            }
+        },
+        {
+            "type": "Microsoft.KeyVault/vaults/secrets",
+            "apiVersion": "2022-07-01",
+            "name": "[concat(parameters('vaults_preciprediagnosiskeys_name'), '/57546dc9-9763-4025-831d-c19991c81540-GMdxiXgvGUUt7U81as-i9b4C7wuiHER94zEBylrLAIc')]",
+            "location": "uksouth",
+            "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', parameters('vaults_preciprediagnosiskeys_name'))]"
+            ],
+            "properties": {
+                "attributes": {
+                    "enabled": true,
+                    "exp": 4795069482
+                }
+            }
+        },
+        {
+            "type": "Microsoft.KeyVault/vaults/secrets",
+            "apiVersion": "2022-07-01",
+            "name": "[concat(parameters('vaults_preciprediagnosiskeys_name'), '/57546dc9-9763-4025-831d-c19991c81540-gN5Y-GDVW6P9oqhtHe9--zeKkYeCGmj57uSPxUVBucM')]",
+            "location": "uksouth",
+            "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', parameters('vaults_preciprediagnosiskeys_name'))]"
+            ],
+            "properties": {
+                "attributes": {
+                    "enabled": true,
+                    "exp": 4795069482
+                }
+            }
+        },
+        {
+            "type": "Microsoft.KeyVault/vaults/secrets",
+            "apiVersion": "2022-07-01",
+            "name": "[concat(parameters('vaults_preciprediagnosiskeys_name'), '/57546dc9-9763-4025-831d-c19991c81540-m-5MzppLfKSugnEkCQQUYakjHbNbEGulwH6VtsQj-NA')]",
+            "location": "uksouth",
+            "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', parameters('vaults_preciprediagnosiskeys_name'))]"
+            ],
+            "properties": {
+                "contentType": "application/vnd.ms-StorageAccountAccessKey",
+                "attributes": {
+                    "enabled": true,
+                    "exp": 1722870557
+                }
+            }
+        },
+        {
+            "type": "Microsoft.KeyVault/vaults/secrets",
+            "apiVersion": "2022-07-01",
+            "name": "[concat(parameters('vaults_preciprediagnosiskeys_name'), '/57546dc9-9763-4025-831d-c19991c81540-wl-QEqBS30Q-ZsI0QQxBCLKOLQPbXyEBNSoOD5J1n6s')]",
+            "location": "uksouth",
+            "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', parameters('vaults_preciprediagnosiskeys_name'))]"
+            ],
+            "properties": {
+                "attributes": {
+                    "enabled": true,
+                    "exp": 4795069482
+                }
+            }
+        },
+        {
+            "type": "Microsoft.MachineLearningServices/workspaces/computes",
+            "apiVersion": "2022-06-01-preview",
+            "name": "[concat(parameters('workspaces_precip_rediagnosis_name'), '/mlops-gpu-test')]",
+            "location": "uksouth",
+            "dependsOn": [
+                "[resourceId('Microsoft.MachineLearningServices/workspaces', parameters('workspaces_precip_rediagnosis_name'))]"
+            ],
+            "properties": {
+                "disableLocalAuth": false
+            }
+        },
+        {
+            "type": "Microsoft.MachineLearningServices/workspaces/computes",
+            "apiVersion": "2022-06-01-preview",
+            "name": "[concat(parameters('workspaces_precip_rediagnosis_name'), '/mlops-test')]",
+            "location": "uksouth",
+            "dependsOn": [
+                "[resourceId('Microsoft.MachineLearningServices/workspaces', parameters('workspaces_precip_rediagnosis_name'))]"
+            ],
+            "properties": {
+                "disableLocalAuth": false
+            }
+        },
+        {
+            "type": "Microsoft.MachineLearningServices/workspaces/computes",
+            "apiVersion": "2022-06-01-preview",
+            "name": "[concat(parameters('workspaces_precip_rediagnosis_name'), '/pangeoLecturesHannah')]",
+            "location": "uksouth",
+            "dependsOn": [
+                "[resourceId('Microsoft.MachineLearningServices/workspaces', parameters('workspaces_precip_rediagnosis_name'))]"
+            ],
+            "properties": {
+                "disableLocalAuth": true
+            }
+        },
+        {
+            "type": "Microsoft.MachineLearningServices/workspaces/computes",
+            "apiVersion": "2022-06-01-preview",
+            "name": "[concat(parameters('workspaces_precip_rediagnosis_name'), '/pete-workflows')]",
+            "location": "uksouth",
+            "dependsOn": [
+                "[resourceId('Microsoft.MachineLearningServices/workspaces', parameters('workspaces_precip_rediagnosis_name'))]"
+            ],
+            "properties": {
+                "disableLocalAuth": true
+            }
+        },
+        {
+            "type": "Microsoft.MachineLearningServices/workspaces/computes",
+            "apiVersion": "2022-06-01-preview",
+            "name": "[concat(parameters('workspaces_precip_rediagnosis_name'), '/prd-data-load-test')]",
+            "location": "uksouth",
+            "dependsOn": [
+                "[resourceId('Microsoft.MachineLearningServices/workspaces', parameters('workspaces_precip_rediagnosis_name'))]"
+            ],
+            "properties": {
+                "disableLocalAuth": true
+            }
+        },
+        {
+            "type": "Microsoft.MachineLearningServices/workspaces/computes",
+            "apiVersion": "2022-06-01-preview",
+            "name": "[concat(parameters('workspaces_precip_rediagnosis_name'), '/prd-ml')]",
+            "location": "uksouth",
+            "dependsOn": [
+                "[resourceId('Microsoft.MachineLearningServices/workspaces', parameters('workspaces_precip_rediagnosis_name'))]"
+            ],
+            "properties": {
+                "disableLocalAuth": true
+            }
+        },
+        {
+            "type": "Microsoft.MachineLearningServices/workspaces/computes",
+            "apiVersion": "2022-06-01-preview",
+            "name": "[concat(parameters('workspaces_precip_rediagnosis_name'), '/prd-ml-fractions')]",
+            "location": "uksouth",
+            "dependsOn": [
+                "[resourceId('Microsoft.MachineLearningServices/workspaces', parameters('workspaces_precip_rediagnosis_name'))]"
+            ],
+            "properties": {
+                "disableLocalAuth": true
+            }
+        },
+        {
+            "type": "Microsoft.MachineLearningServices/workspaces/computes",
+            "apiVersion": "2022-06-01-preview",
+            "name": "[concat(parameters('workspaces_precip_rediagnosis_name'), '/prd-ml-fractions-cluster')]",
+            "location": "uksouth",
+            "dependsOn": [
+                "[resourceId('Microsoft.MachineLearningServices/workspaces', parameters('workspaces_precip_rediagnosis_name'))]"
+            ],
+            "properties": {
+                "disableLocalAuth": false
+            }
+        },
+        {
+            "type": "Microsoft.MachineLearningServices/workspaces/computes",
+            "apiVersion": "2022-06-01-preview",
+            "name": "[concat(parameters('workspaces_precip_rediagnosis_name'), '/prd-ml-fractions-cluster-gpu')]",
+            "location": "uksouth",
+            "dependsOn": [
+                "[resourceId('Microsoft.MachineLearningServices/workspaces', parameters('workspaces_precip_rediagnosis_name'))]"
+            ],
+            "properties": {
+                "disableLocalAuth": false
+            }
+        },
+        {
+            "type": "Microsoft.MachineLearningServices/workspaces/computes",
+            "apiVersion": "2022-06-01-preview",
+            "name": "[concat(parameters('workspaces_precip_rediagnosis_name'), '/prd-ml-large')]",
+            "location": "uksouth",
+            "dependsOn": [
+                "[resourceId('Microsoft.MachineLearningServices/workspaces', parameters('workspaces_precip_rediagnosis_name'))]"
+            ],
+            "properties": {
+                "disableLocalAuth": true
+            }
+        },
+        {
+            "type": "Microsoft.MachineLearningServices/workspaces/computes",
+            "apiVersion": "2022-06-01-preview",
+            "name": "[concat(parameters('workspaces_precip_rediagnosis_name'), '/prd-ml-pipeline')]",
+            "location": "uksouth",
+            "dependsOn": [
+                "[resourceId('Microsoft.MachineLearningServices/workspaces', parameters('workspaces_precip_rediagnosis_name'))]"
+            ],
+            "properties": {
+                "disableLocalAuth": true
+            }
+        },
+        {
+            "type": "Microsoft.MachineLearningServices/workspaces/datastores",
+            "apiVersion": "2022-06-01-preview",
+            "name": "[concat(parameters('workspaces_precip_rediagnosis_name'), '/azureml_globaldatasets')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.MachineLearningServices/workspaces', parameters('workspaces_precip_rediagnosis_name'))]"
+            ],
+            "properties": {
+                "credentials": {
+                    "credentialsType": "Sas",
+                    "secrets": {}
+                },
+                "datastoreType": "AzureBlob",
+                "protocol": "https",
+                "nameNodeAddress": "[parameters('datastores_azureml_globaldatasets_nameNodeAddress')]"
+            }
+        },
+        {
+            "type": "Microsoft.MachineLearningServices/workspaces/datastores",
+            "apiVersion": "2022-06-01-preview",
+            "name": "[concat(parameters('workspaces_precip_rediagnosis_name'), '/workspaceartifactstore')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.MachineLearningServices/workspaces', parameters('workspaces_precip_rediagnosis_name'))]"
+            ],
+            "properties": {
+                "credentials": {
+                    "credentialsType": "AccountKey",
+                    "secrets": {}
+                },
+                "datastoreType": "AzureBlob",
+                "protocol": "https",
+                "nameNodeAddress": "[parameters('datastores_workspaceartifactstore_nameNodeAddress')]"
+            }
+        },
+        {
+            "type": "Microsoft.MachineLearningServices/workspaces/datastores",
+            "apiVersion": "2022-06-01-preview",
+            "name": "[concat(parameters('workspaces_precip_rediagnosis_name'), '/workspaceblobstore')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.MachineLearningServices/workspaces', parameters('workspaces_precip_rediagnosis_name'))]"
+            ],
+            "properties": {
+                "credentials": {
+                    "credentialsType": "AccountKey",
+                    "secrets": {}
+                },
+                "datastoreType": "AzureBlob",
+                "protocol": "https",
+                "nameNodeAddress": "[parameters('datastores_workspaceblobstore_nameNodeAddress')]"
+            }
+        },
+        {
+            "type": "Microsoft.MachineLearningServices/workspaces/datastores",
+            "apiVersion": "2022-06-01-preview",
+            "name": "[concat(parameters('workspaces_precip_rediagnosis_name'), '/workspacefilestore')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.MachineLearningServices/workspaces', parameters('workspaces_precip_rediagnosis_name'))]"
+            ],
+            "properties": {
+                "credentials": {
+                    "credentialsType": "AccountKey",
+                    "secrets": {}
+                },
+                "datastoreType": "AzureFile",
+                "protocol": "https",
+                "nameNodeAddress": "[parameters('datastores_workspacefilestore_nameNodeAddress')]"
+            }
+        },
+        {
+            "type": "Microsoft.MachineLearningServices/workspaces/datastores",
+            "apiVersion": "2022-06-01-preview",
+            "name": "[concat(parameters('workspaces_precip_rediagnosis_name'), '/workspaceworkingdirectory')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.MachineLearningServices/workspaces', parameters('workspaces_precip_rediagnosis_name'))]"
+            ],
+            "properties": {
+                "credentials": {
+                    "credentialsType": "AccountKey",
+                    "secrets": {}
+                },
+                "datastoreType": "AzureFile",
+                "protocol": "https",
+                "nameNodeAddress": "[parameters('datastores_workspaceworkingdirectory_nameNodeAddress')]"
+            }
+        },
+        {
+            "type": "Microsoft.Network/networkSecurityGroups/securityRules",
+            "apiVersion": "2020-11-01",
+            "name": "[concat(parameters('networkSecurityGroups_prd_nsg_name'), '/MyNsgRuleWithAsg')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/networkSecurityGroups', parameters('networkSecurityGroups_prd_nsg_name'))]"
+            ],
+            "properties": {
+                "description": "Allow Internet to Dask on ports 8786,8787.",
+                "protocol": "Tcp",
+                "sourcePortRange": "*",
+                "sourceAddressPrefix": "Internet",
+                "destinationAddressPrefix": "*",
+                "access": "Allow",
+                "priority": 500,
+                "direction": "Inbound",
+                "sourcePortRanges": [],
+                "destinationPortRanges": [
+                    "8786",
+                    "8787"
+                ],
+                "sourceAddressPrefixes": [],
+                "destinationAddressPrefixes": []
+            }
+        },
+        {
+            "type": "Microsoft.Network/virtualNetworks/subnets",
+            "apiVersion": "2020-11-01",
+            "name": "[concat(parameters('virtualNetworks_prd_vnet_name'), '/prd_subnet')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/virtualNetworks', parameters('virtualNetworks_prd_vnet_name'))]"
+            ],
+            "properties": {
+                "addressPrefix": "10.0.0.0/24",
+                "delegations": [],
+                "privateEndpointNetworkPolicies": "Enabled",
+                "privateLinkServiceNetworkPolicies": "Enabled"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices",
+            "apiVersion": "2022-05-01",
+            "name": "[concat(parameters('storageAccounts_preciprediagnosisstorage_name'), '/default')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccounts_preciprediagnosisstorage_name'))]"
+            ],
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "properties": {
+                "cors": {
+                    "corsRules": [
+                        {
+                            "allowedOrigins": [
+                                "https://mlworkspace.azure.ai",
+                                "https://ml.azure.com",
+                                "https://*.ml.azure.com"
+                            ],
+                            "allowedMethods": [
+                                "GET",
+                                "HEAD"
+                            ],
+                            "maxAgeInSeconds": 1800,
+                            "exposedHeaders": [
+                                "*"
+                            ],
+                            "allowedHeaders": [
+                                "*"
+                            ]
+                        }
+                    ]
+                },
+                "deleteRetentionPolicy": {
+                    "allowPermanentDelete": false,
+                    "enabled": false
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/fileServices",
+            "apiVersion": "2022-05-01",
+            "name": "[concat(parameters('storageAccounts_preciprediagnosisstorage_name'), '/default')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccounts_preciprediagnosisstorage_name'))]"
+            ],
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "properties": {
+                "protocolSettings": {
+                    "smb": {}
+                },
+                "cors": {
+                    "corsRules": []
+                },
+                "shareDeleteRetentionPolicy": {
+                    "enabled": true,
+                    "days": 7
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/queueServices",
+            "apiVersion": "2022-05-01",
+            "name": "[concat(parameters('storageAccounts_preciprediagnosisstorage_name'), '/default')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccounts_preciprediagnosisstorage_name'))]"
+            ],
+            "properties": {
+                "cors": {
+                    "corsRules": []
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/tableServices",
+            "apiVersion": "2022-05-01",
+            "name": "[concat(parameters('storageAccounts_preciprediagnosisstorage_name'), '/default')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccounts_preciprediagnosisstorage_name'))]"
+            ],
+            "properties": {
+                "cors": {
+                    "corsRules": []
+                }
+            }
+        },
+        {
+            "type": "microsoft.alertsmanagement/smartdetectoralertrules",
+            "apiVersion": "2021-04-01",
+            "name": "[parameters('smartdetectoralertrules_failure_anomalies___preciprediagno1325391227_name')]",
+            "location": "global",
+            "dependsOn": [
+                "[resourceId('microsoft.insights/components', parameters('components_preciprediagno1325391227_name'))]",
+                "[resourceId('microsoft.insights/actionGroups', parameters('actionGroups_Application_Insights_Smart_Detection_name'))]"
+            ],
+            "properties": {
+                "description": "Failure Anomalies notifies you of an unusual rise in the rate of failed HTTP requests or dependency calls.",
+                "state": "Enabled",
+                "severity": "Sev3",
+                "frequency": "PT1M",
+                "detector": {
+                    "id": "FailureAnomaliesDetector"
+                },
+                "scope": [
+                    "[resourceId('microsoft.insights/components', parameters('components_preciprediagno1325391227_name'))]"
+                ],
+                "actionGroups": {
+                    "groupIds": [
+                        "[resourceId('microsoft.insights/actionGroups', parameters('actionGroups_Application_Insights_Smart_Detection_name'))]"
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+            "apiVersion": "2022-05-01",
+            "name": "[concat(parameters('storageAccounts_preciprediagnosisstorage_name'), '/default/aml-environment-image-build')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', parameters('storageAccounts_preciprediagnosisstorage_name'), 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccounts_preciprediagnosisstorage_name'))]"
+            ],
+            "properties": {
+                "immutableStorageWithVersioning": {
+                    "enabled": false
+                },
+                "defaultEncryptionScope": "$account-encryption-key",
+                "denyEncryptionScopeOverride": false,
+                "publicAccess": "None"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+            "apiVersion": "2022-05-01",
+            "name": "[concat(parameters('storageAccounts_preciprediagnosisstorage_name'), '/default/azureml')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', parameters('storageAccounts_preciprediagnosisstorage_name'), 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccounts_preciprediagnosisstorage_name'))]"
+            ],
+            "properties": {
+                "immutableStorageWithVersioning": {
+                    "enabled": false
+                },
+                "defaultEncryptionScope": "$account-encryption-key",
+                "denyEncryptionScopeOverride": false,
+                "publicAccess": "None"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+            "apiVersion": "2022-05-01",
+            "name": "[concat(parameters('storageAccounts_preciprediagnosisstorage_name'), '/default/azureml-blobstore-57546dc9-9763-4025-831d-c19991c81540')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', parameters('storageAccounts_preciprediagnosisstorage_name'), 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccounts_preciprediagnosisstorage_name'))]"
+            ],
+            "properties": {
+                "immutableStorageWithVersioning": {
+                    "enabled": false
+                },
+                "defaultEncryptionScope": "$account-encryption-key",
+                "denyEncryptionScopeOverride": false,
+                "publicAccess": "None"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+            "apiVersion": "2022-05-01",
+            "name": "[concat(parameters('storageAccounts_preciprediagnosisstorage_name'), '/default/azureml-metrics')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', parameters('storageAccounts_preciprediagnosisstorage_name'), 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccounts_preciprediagnosisstorage_name'))]"
+            ],
+            "properties": {
+                "immutableStorageWithVersioning": {
+                    "enabled": false
+                },
+                "defaultEncryptionScope": "$account-encryption-key",
+                "denyEncryptionScopeOverride": false,
+                "publicAccess": "None"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+            "apiVersion": "2022-05-01",
+            "name": "[concat(parameters('storageAccounts_preciprediagnosisstorage_name'), '/default/revisions')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', parameters('storageAccounts_preciprediagnosisstorage_name'), 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccounts_preciprediagnosisstorage_name'))]"
+            ],
+            "properties": {
+                "immutableStorageWithVersioning": {
+                    "enabled": false
+                },
+                "defaultEncryptionScope": "$account-encryption-key",
+                "denyEncryptionScopeOverride": false,
+                "publicAccess": "None"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+            "apiVersion": "2022-05-01",
+            "name": "[concat(parameters('storageAccounts_preciprediagnosisstorage_name'), '/default/snapshots')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', parameters('storageAccounts_preciprediagnosisstorage_name'), 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccounts_preciprediagnosisstorage_name'))]"
+            ],
+            "properties": {
+                "immutableStorageWithVersioning": {
+                    "enabled": false
+                },
+                "defaultEncryptionScope": "$account-encryption-key",
+                "denyEncryptionScopeOverride": false,
+                "publicAccess": "None"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+            "apiVersion": "2022-05-01",
+            "name": "[concat(parameters('storageAccounts_preciprediagnosisstorage_name'), '/default/snapshotzips')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', parameters('storageAccounts_preciprediagnosisstorage_name'), 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccounts_preciprediagnosisstorage_name'))]"
+            ],
+            "properties": {
+                "immutableStorageWithVersioning": {
+                    "enabled": false
+                },
+                "defaultEncryptionScope": "$account-encryption-key",
+                "denyEncryptionScopeOverride": false,
+                "publicAccess": "None"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+            "apiVersion": "2022-05-01",
+            "name": "[concat(parameters('storageAccounts_preciprediagnosisstorage_name'), '/default/training202208')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', parameters('storageAccounts_preciprediagnosisstorage_name'), 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccounts_preciprediagnosisstorage_name'))]"
+            ],
+            "properties": {
+                "immutableStorageWithVersioning": {
+                    "enabled": false
+                },
+                "defaultEncryptionScope": "$account-encryption-key",
+                "denyEncryptionScopeOverride": false,
+                "publicAccess": "None"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+            "apiVersion": "2022-05-01",
+            "name": "[concat(parameters('storageAccounts_preciprediagnosisstorage_name'), '/default/training202209')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', parameters('storageAccounts_preciprediagnosisstorage_name'), 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccounts_preciprediagnosisstorage_name'))]"
+            ],
+            "properties": {
+                "immutableStorageWithVersioning": {
+                    "enabled": false
+                },
+                "defaultEncryptionScope": "$account-encryption-key",
+                "denyEncryptionScopeOverride": false,
+                "publicAccess": "None"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
+            "apiVersion": "2022-05-01",
+            "name": "[concat(parameters('storageAccounts_preciprediagnosisstorage_name'), '/default/azureml-filestore-57546dc9-9763-4025-831d-c19991c81540')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/fileServices', parameters('storageAccounts_preciprediagnosisstorage_name'), 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccounts_preciprediagnosisstorage_name'))]"
+            ],
+            "properties": {
+                "accessTier": "TransactionOptimized",
+                "shareQuota": 5120,
+                "enabledProtocols": "SMB"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
+            "apiVersion": "2022-05-01",
+            "name": "[concat(parameters('storageAccounts_preciprediagnosisstorage_name'), '/default/code-391ff5ac-6576-460f-ba4d-7e03433c68b6')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/fileServices', parameters('storageAccounts_preciprediagnosisstorage_name'), 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccounts_preciprediagnosisstorage_name'))]"
+            ],
+            "properties": {
+                "accessTier": "TransactionOptimized",
+                "shareQuota": 5120,
+                "enabledProtocols": "SMB"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
+            "apiVersion": "2022-05-01",
+            "name": "[concat(parameters('storageAccounts_preciprediagnosisstorage_name'), '/default/codeshare-57546dc9-9763-4025-831d-c19991c81540')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/fileServices', parameters('storageAccounts_preciprediagnosisstorage_name'), 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccounts_preciprediagnosisstorage_name'))]"
+            ],
+            "properties": {
+                "accessTier": "TransactionOptimized",
+                "shareQuota": 5120,
+                "enabledProtocols": "SMB"
+            }
+        },
+        {
+            "type": "Microsoft.MachineLearningServices/workspaces",
+            "apiVersion": "2022-06-01-preview",
+            "name": "[parameters('workspaces_precip_rediagnosis_name')]",
+            "location": "uksouth",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccounts_preciprediagnosisstorage_name'))]",
+                "[resourceId('Microsoft.KeyVault/vaults', parameters('vaults_preciprediagnosiskeys_name'))]",
+                "[resourceId('microsoft.insights/components', parameters('components_preciprediagno1325391227_name'))]",
+                "[resourceId('Microsoft.ContainerRegistry/registries', parameters('registries_precipRediagnosisContainers_name'))]"
+            ],
+            "tags": {
+                "project": "precip_rediagnosis",
+                "owner": "Stephen Haddad",
+                "cost_code": "PDPRIS"
+            },
+            "sku": {
+                "name": "Basic",
+                "tier": "Basic"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "friendlyName": "[parameters('workspaces_precip_rediagnosis_name')]",
+                "storageAccount": "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccounts_preciprediagnosisstorage_name'))]",
+                "keyVault": "[resourceId('Microsoft.KeyVault/vaults', parameters('vaults_preciprediagnosiskeys_name'))]",
+                "applicationInsights": "[resourceId('microsoft.insights/components', parameters('components_preciprediagno1325391227_name'))]",
+                "hbiWorkspace": false,
+                "containerRegistry": "[resourceId('Microsoft.ContainerRegistry/registries', parameters('registries_precipRediagnosisContainers_name'))]",
+                "publicNetworkAccess": "Enabled",
+                "discoveryUrl": "https://uksouth.api.azureml.ms/discovery"
+            }
+        }
+    ]
+}
