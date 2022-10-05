@@ -25,6 +25,9 @@ try:
 except ImportError:
     print('AzureML libraries not found, using local execution functions.')
     USING_AZML=False
+
+import mlflow
+
 import fsspec
 
 import pickle
@@ -33,6 +36,11 @@ PRD_PREFIX = 'prd'
 MERGED_PREFIX = PRD_PREFIX + '_merged'
 CSV_FILE_SUFFIX = 'csv'
 
+
+
+def setup_logging():
+    mlflow.tensorflow.autolog(log_model_signatures=True)
+    
 def build_model(nprof_features, nheights, nsinglvl_features, nbands):
     """
     This 1D convoluational neural network take a regression approach to predict 
@@ -364,17 +372,36 @@ def preprocess_data(input_data, feature_dict, test_fraction=0.2):
     return data_splits, data_dims_dict
 
 
-def calc_metrics(current_run, data_splits, y_pred):
+
+
+def calc_metrics(data_splits, y_pred):
     metrics_dict = {}
     metrics_dict['mean_absolute_error'] = mean_absolute_error(data_splits['y_val'], y_pred)
     metrics_dict['R-squared score'] = r2_score(data_splits['y_val'], y_pred)
+
     for k1, v1 in metrics_dict.items():
-        current_run.log(k1, v1)
+        mlflow.log_metric(k1, v1)
     return metrics_dict
 
 
+
+def save_model(model, prd_model_name):
+    mlflow.keras.log_model(model, prd_model_name)
+
+
 if USING_AZML:
-    def save_model(model, prd_model_name):
+
+    def calc_metrics_azml(data_splits, y_pred):
+        metrics_dict = {}
+        metrics_dict['mean_absolute_error'] = mean_absolute_error(data_splits['y_val'], y_pred)
+        metrics_dict['R-squared score'] = r2_score(data_splits['y_val'], y_pred)
+        current_run = azureml.core.Run.get_context()
+
+        for k1, v1 in metrics_dict.items():
+            current_run.log(k1, v1)
+        return metrics_dict
+
+    def save_model_azml(model, prd_model_name):
         prd_run = azureml.core.Run.get_context()
 
         # We dont access a workspace in the same way in a script compared to a notebook, as described in the stackoverflow post:
@@ -394,4 +421,3 @@ if USING_AZML:
             model.save(model_save_path)
             prd_run.upload_folder(name=prd_model_name, path=str(model_save_path))
             prd_run.register_model(prd_model_name, prd_model_name + '/')
-    
