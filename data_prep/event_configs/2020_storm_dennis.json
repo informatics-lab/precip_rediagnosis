@@ -32,10 +32,11 @@
       "area": "UK",
       "radar_fname_prefix": "prd_radar",
       "rainfall_thresholds": {
-        "0.25": [0.0, 0.5],
-        "2.5": [0.5, 4.0],
-        "7.0": [4.0, 10.0],
-        "10.0": [10.0, 220.0]
+            "0.0": [0.0,0.01],
+             "0.25": [0.01, 0.5],
+             "2.5": [0.5, 4.0],
+             "7.0": [4.0, 10.0],
+             "10.0": [10.0, 220.0]
       }
     },
     {
@@ -51,8 +52,6 @@
       ],
       "single_level_variables": [
         "cloud_amount_of_total_cloud",
-        "rainfall_rate",
-        "snowfall_rate",
         "height_of_orography",
         "pressure_at_mean_sea_level",
         "rainfall_rate",

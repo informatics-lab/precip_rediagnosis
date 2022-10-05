@@ -1,0 +1,19 @@
+name: prd_data_prep_azml
+channels:
+  - conda-forge
+dependencies:
+  - python=3.8
+  - jupyterlab
+  - dask-labextension
+  - pandas=1.3
+  - xarray=0.19
+  - iris=3.1  
+  - cartopy=0.20
+  - dask  
+  - pip:
+    - azureml-core
+    - azureml-dataset-runtime
+    - azureml-mlflow
+    - azureml-pipeline
+    - azureml-widgets
+    

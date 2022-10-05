@@ -29,6 +29,12 @@ For this project a lot of the wor is being done using the AzureML machine learni
 Once you have started a compute instance on AzureML, access it through the Jupter Lab interface. Open a new terminal and once you have clopned the repo, then you can install a conda environemt in the usual way. 
 To make available in a notebook, you will need to run an extra command to make your conda environment available as a kernel as follows:
 
+```
+conda activate myenv
+python -m ipykernel install --user --name=myenv_kernel_name --display-name="My Magniloquent Env"
+```
+
+[source](https://medium.com/@nrk25693/how-to-add-your-conda-environment-to-your-jupyter-notebook-in-just-4-steps-abeab8b8d084)
 
 ### Compute Cluster
 

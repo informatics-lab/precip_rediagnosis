@@ -14,6 +14,3 @@ dependencies:
   - pip:
     - azureml-core
     - azureml-dataset-runtime
-    - azureml-mlflow
-    - azureml-pipeline
-    - azureml-widgets
