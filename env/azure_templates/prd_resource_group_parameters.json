@@ -3,61 +3,46 @@
     "contentVersion": "1.0.0.0",
     "parameters": {
         "datastores_azureml_globaldatasets_nameNodeAddress": {
-            "value": null
-        },
-        "datastores_precip_rediagnosis_train202208_nameNodeAddress": {
-            "value": null
-        },
-        "datastores_precip_rediagnosis_train202209_nameNodeAddress": {
-            "value": null
+            "value": "prd_td01_globds"
         },
         "datastores_workspaceartifactstore_nameNodeAddress": {
-            "value": null
+            "value": "prd_td01_artifactstore"
         },
         "datastores_workspaceblobstore_nameNodeAddress": {
-            "value": null
+            "value": "prd_td01_wsblobstore"
         },
         "datastores_workspacefilestore_nameNodeAddress": {
-            "value": null
+            "value": "prd_td01_wsfstore"
         },
         "datastores_workspaceworkingdirectory_nameNodeAddress": {
-            "value": null
+            "value": "prd_td01_ws_workingdir"
         },
         "virtualNetworks_prd_vnet_name": {
-            "value": null
+            "value": "prd_td01_vnet"
         },
         "vaults_preciprediagnosiskeys_name": {
-            "value": null
+            "value": "prd_td01_keys"
         },
         "networkSecurityGroups_prd_nsg_name": {
-            "value": null
+            "value": "prd_td01_network_security"
         },
         "components_preciprediagno1325391227_name": {
-            "value": null
+            "value": "prd_td01_addinsights"
         },
         "storageAccounts_preciprediagnosisstorage_name": {
-            "value": null
+            "value": "prdtd01storage"
         },
         "networkSecurityGroups_precip_rediagnosis_sg_name": {
-            "value": null
+            "value": "prd_td01_sg"
         },
         "workspaces_precip_rediagnosis_name": {
-            "value": null
+            "value": "prd_td01_azml_workspace"
         },
         "registries_precipRediagnosisContainers_name": {
-            "value": null
+            "value": "prd_td01_containers"
         },
         "actionGroups_Application_Insights_Smart_Detection_name": {
-            "value": null
-        },
-        "smartdetectoralertrules_failure_anomalies___training7653333708_name": {
-            "value": null
-        },
-        "smartdetectoralertrules_failure_anomalies___preciprediagno1325391227_name": {
-            "value": null
-        },
-        "components_training7653333708_externalid": {
-            "value": null
+            "value": "prd_td01_smartdetection"
         }
     }
 }
