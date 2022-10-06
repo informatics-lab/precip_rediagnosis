@@ -80,7 +80,9 @@ def train_model(model, data_splits, hyperparameter_dict):
                         data_splits['y_train'], 
                         epochs=hyperparameter_dict['epochs'], 
                         batch_size=hyperparameter_dict['batch_size'], 
-                        validation_data=(data_splits['X_val'], data_splits['y_val']), verbose=True)
+                        validation_data=(data_splits['X_val'], data_splits['y_val']), 
+                        verbose=True,
+                        class_weight=hyperparameter_dict['class_weights'])
     return model, history
 
 
