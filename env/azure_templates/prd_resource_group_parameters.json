@@ -21,7 +21,7 @@
             "value": "prd_td01_vnet"
         },
         "vaults_preciprediagnosiskeys_name": {
-            "value": "prd_td01_keys"
+            "value": "prdtd01keys"
         },
         "networkSecurityGroups_prd_nsg_name": {
             "value": "prd_td01_network_security"
@@ -36,10 +36,10 @@
             "value": "prd_td01_sg"
         },
         "workspaces_precip_rediagnosis_name": {
-            "value": "prd_td01_azml_workspace"
+            "value": "prdtd01azmlworkspace"
         },
         "registries_precipRediagnosisContainers_name": {
-            "value": "prd_td01_containers"
+            "value": "prdtd01containers"
         },
         "actionGroups_Application_Insights_Smart_Detection_name": {
             "value": "prd_td01_smartdetection"
