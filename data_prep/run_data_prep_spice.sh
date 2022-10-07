@@ -6,9 +6,9 @@
 #export EVENT_NAME=${1}
 #export EVENT_NAME=2020_storm_dennis
 echo Processing event ${EVENT_NAME}
+echo Writing data to ${OUTPUT_PATH}
 
 export SRC_PATH=$HOME/prog/precip_rediagnosis/
-export OUTPUT_PATH=$SCRATCH/precip_rediagnosis/train_202209
 export EVENT_CONFIG=${SRC_PATH}/data_prep/event_configs/${EVENT_NAME}.json
 export TARGET_CUBE_PATH=/project/informatics_lab/precip_rediagnosis/target_cube.nc
 
