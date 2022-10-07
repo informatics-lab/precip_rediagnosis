@@ -72,7 +72,8 @@ def main():
     hyperparameter_dict = {
         'epochs': args.epochs, 
         'learning_rate': args.learning_rate, 
-        'batch_size': args.batch_size
+        'batch_size': args.batch_size,
+        'class_weights': None
     }
     
     model, history = prd_pipeline.train_model(model, data_splits, hyperparameter_dict, log_dir=args.log_dir)
