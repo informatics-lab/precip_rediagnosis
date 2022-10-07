@@ -63,6 +63,11 @@ def build_model(nprof_features, nheights, nsinglvl_features, nbands):
     out = Flatten()(x)
     out = Dense(prof_size, use_bias=False, activation='relu')(out)
 
+    if nbands == 1:
+        activation = 'linear'
+    else:
+        activation = 'softmax'
+    
     if nsinglvl_features > 0:
         surf_input = Input(shape=(nsinglvl_features,), name='surf_input')
         flat_profs = Flatten()(profile_input)
@@ -74,11 +79,11 @@ def build_model(nprof_features, nheights, nsinglvl_features, nbands):
         x = Dense(1024, use_bias=False, activation='relu')(x)
         x = Dense(1024, use_bias=False, activation='relu')(x)
         
-        main_output = Dense(nbands, use_bias=True, activation='softmax', name='main_output')(x)
+        main_output = Dense(nbands, use_bias=True, activation=activation, name='main_output')(x)
         model = Model(inputs=[profile_input, surf_input], outputs=[main_output])
 
     else:
-        main_output = Dense(nbands, activation='softmax', name='main_output')(out) # use_bias=True, 
+        main_output = Dense(nbands, activation=activation, name='main_output')(out) # use_bias=True, 
         model = Model(inputs=[profile_input], outputs=[main_output])
         
     return model
@@ -92,14 +97,18 @@ def train_model(model, data_splits, hyperparameter_dict, log_dir):
     tf_callbacks = [tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)]
     
     optimizer = tf.keras.optimizers.Adam(learning_rate=hyperparameter_dict['learning_rate'])
-    model.compile(loss=tf.keras.losses.KLDivergence(), optimizer=optimizer, metrics=['accuracy'])
-
+    model.compile(loss=hyperparameter_dict['loss'], optimizer=optimizer, metrics=['accuracy'])
+    
+    class_weights = None
+    if 'class_weights' in hyperparameter_dict:
+        class_weights = hyperparamter_dict['class_weights']
+        
     history = model.fit(data_splits['X_train'], 
                         data_splits['y_train'], 
                         epochs=hyperparameter_dict['epochs'], 
                         batch_size=hyperparameter_dict['batch_size'], 
                         validation_data=(data_splits['X_val'], data_splits['y_val']), 
-                        class_weight=hyperparameter_dict['class_weights'],
+                        class_weight=class_weights,
                         callbacks=tf_callbacks,
                         verbose=True)
     return model, history
