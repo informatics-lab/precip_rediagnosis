@@ -19,12 +19,28 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_absolute_error, r2_score
 
 # azure specific imports
-import azureml.core
+try:
+    import azureml.core
+    USING_AZML=True
+except ImportError:
+    print('AzureML libraries not found, using local execution functions.')
+    USING_AZML=False
 
-# import fsspec
+import mlflow
+
+import fsspec
+
 import pickle
 
+PRD_PREFIX = 'prd'
+MERGED_PREFIX = PRD_PREFIX + '_merged'
+CSV_FILE_SUFFIX = 'csv'
 
+
+def setup_logging():
+    mlflow.tensorflow.autolog(log_model_signatures=True)
+
+    
 def build_model(nprof_features, nheights, nsinglvl_features, nbands):
     """
     This 1D convoluational neural network take a regression approach to predict 
@@ -68,11 +84,13 @@ def build_model(nprof_features, nheights, nsinglvl_features, nbands):
     return model
 
 
-def train_model(model, data_splits, hyperparameter_dict):
+def train_model(model, data_splits, hyperparameter_dict, log_dir):
     """
     This function trains the input model with the given data samples in data_splits. 
     Hyperparameters use when fitting the model are defined in hyperparameter_dict.
     """
+    tf_callbacks = [tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)]
+    
     optimizer = tf.keras.optimizers.Adam(learning_rate=hyperparameter_dict['learning_rate'])
     model.compile(loss=tf.keras.losses.KLDivergence(), optimizer=optimizer, metrics=['accuracy'])
 
@@ -81,18 +99,82 @@ def train_model(model, data_splits, hyperparameter_dict):
                         epochs=hyperparameter_dict['epochs'], 
                         batch_size=hyperparameter_dict['batch_size'], 
                         validation_data=(data_splits['X_val'], data_splits['y_val']), 
-                        verbose=True,
-                        class_weight=hyperparameter_dict['class_weights'])
+                        class_weight=hyperparameter_dict['class_weights'],
+                        callbacks=tf_callbacks,
+                        verbose=True)
     return model, history
 
 
-def load_data(current_ws, dataset_name):
+def log_history(history):
+    prd_run = azureml.core.Run.get_context()
+    # for k1, v1 in model.history.history.items():
+    for k1, v1 in history.history.items():
+        prd_run.log(k1, v1[-1])
+
+
+def load_data_local(dataset_dir):
+    print('loading all event data')
+    dataset_dir = pathlib.Path(dataset_dir)
+    prd_path_list = [p1 for p1 in dataset_dir.rglob(f'{MERGED_PREFIX}*{CSV_FILE_SUFFIX}') ]
+    merged_df = pd.concat([pd.read_csv(p1) for p1 in prd_path_list])
+    return merged_df
+
+if USING_AZML:
+
+    def load_data_azml_dataset(dataset_name):
+        """
+        This function loads data from AzureML storage and returns it as a pandas dataframe 
+        """
+        prd_run = azureml.core.Run.get_context()
+
+        # We dont access a workspace in the same way in a script compared to a notebook, as described in the stackoverflow post:
+        # https://stackoverflow.com/questions/68778097/get-current-workspace-from-inside-a-azureml-pipeline-step 
+        prd_ws = prd_run.experiment.workspace
+
+        dataset = azureml.core.Dataset.get_by_name(prd_ws, name=dataset_name)
+
+        with dataset.mount() as ds_mount:
+            print('loading all event data from azml file dataset')
+            prd_path_list = [p1 for p1 in pathlib.Path(ds_mount.mount_point).rglob(f'{MERGED_PREFIX}*{CSV_FILE_SUFFIX}') ]
+            merged_df = pd.concat([pd.read_csv(p1) for p1 in prd_path_list])
+        return merged_df
+    
+def load_data_azure_blob(az_blob_cred, blob_path):
     """
-    This function loads data from AzureML storage and returns it as a pandas dataframe 
+    Load data direct from a blob store. Need to provide credentials
+    Inputs
+    az_blob_cred - A dictionary loaded from the credentials.json file.
+    blob_path - The relative path to the object(s) in the blob store relative to the container specified in the credentials.
     """
-    dataset = azureml.core.Dataset.get_by_name(current_ws, name=dataset_name)
-    input_data = dataset.to_pandas_dataframe()    
-    return input_data
+    print('loading data direct from blobstore')
+    container = az_blob_cred['container']
+    acc_name = az_blob_cred['storage_acc_name']
+    acc_key = az_blob_cred['storage_acc_key']
+
+    prd_data_url = f'abfs://{container}/{blob_path}'
+
+    handle1 = fsspec.open_files(
+        prd_data_url,
+        account_name=acc_name, 
+        account_key=acc_key
+    )
+
+    fsspec_handle = fsspec.open(
+        prd_data_url,
+        account_name=acc_name, 
+        account_key=acc_key
+    )
+
+    with fsspec_handle.open() as prd_data_handle:
+        prd_merged_data = pd.read_csv(prd_data_handle)
+
+    csv_list = []
+    for h1 in list(handle1)[:2]:
+        with h1.open() as prd_dh:
+            csv_list += [pd.read_csv(prd_dh)]
+
+    prd_merged_df = pd.concat(csv_list)
+    return prd_merged_df
 
 
 def random_sample(df, test_fraction, random_state):
@@ -291,10 +373,49 @@ def preprocess_data(input_data, feature_dict, test_fraction=0.2):
     return data_splits, data_dims_dict
 
 
-def calc_metrics(current_run, data_splits, y_pred):
+def calc_metrics(data_splits, y_pred):
     metrics_dict = {}
     metrics_dict['mean_absolute_error'] = mean_absolute_error(data_splits['y_val'], y_pred)
     metrics_dict['R-squared score'] = r2_score(data_splits['y_val'], y_pred)
+
     for k1, v1 in metrics_dict.items():
-        current_run.log(k1, v1)
+        mlflow.log_metric(k1, v1)
     return metrics_dict
+
+
+def save_model(model, prd_model_name):
+    mlflow.keras.log_model(model, prd_model_name)
+
+
+if USING_AZML:
+
+    def calc_metrics_azml(data_splits, y_pred):
+        metrics_dict = {}
+        metrics_dict['mean_absolute_error'] = mean_absolute_error(data_splits['y_val'], y_pred)
+        metrics_dict['R-squared score'] = r2_score(data_splits['y_val'], y_pred)
+        current_run = azureml.core.Run.get_context()
+
+        for k1, v1 in metrics_dict.items():
+            current_run.log(k1, v1)
+        return metrics_dict
+
+    def save_model_azml(model, prd_model_name):
+        prd_run = azureml.core.Run.get_context()
+
+        # We dont access a workspace in the same way in a script compared to a notebook, as described in the stackoverflow post:
+        # https://stackoverflow.com/questions/68778097/get-current-workspace-from-inside-a-azureml-pipeline-step 
+        prd_ws = prd_run.experiment.workspace
+
+        # save the model to temp directory and save to the run. 
+        # (The local files will be cleaned up with the temp directory.)
+        with tempfile.TemporaryDirectory() as td1:
+            # save model architecure as JSON
+            # this can be loaded using tf.keras.models.model_from_json and then training can be run
+            model_json_path = pathlib.Path(td1) / (prd_model_name + '.json')
+            with open(model_json_path,'w') as json_file:
+                json_file.write(model.to_json())
+            prd_run.upload_file(name=prd_model_name + '_architecture', path_or_stream=str(model_json_path) )
+            model_save_path = pathlib.Path(td1) / prd_model_name
+            model.save(model_save_path)
+            prd_run.upload_folder(name=prd_model_name, path=str(model_save_path))
+            prd_run.register_model(prd_model_name, prd_model_name + '/')
