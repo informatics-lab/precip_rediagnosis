@@ -9,6 +9,7 @@ import tempfile
 import pathlib
 import pandas as pd
 import numpy as np
+import tensorflow as tf
 
 # NB No AzreML imports in this file!!!
 
@@ -73,7 +74,8 @@ def main():
         'epochs': args.epochs, 
         'learning_rate': args.learning_rate, 
         'batch_size': args.batch_size,
-        'class_weights': None
+        'class_weights': None, 
+        'loss': tf.keras.losses.KLDivergence()
     }
     
     model, history = prd_pipeline.train_model(model, data_splits, hyperparameter_dict, log_dir=args.log_dir)
