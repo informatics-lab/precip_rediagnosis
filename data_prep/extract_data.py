@@ -58,7 +58,10 @@ def main():
         dataset_config = json.load(config_file)
     event_name = dataset_config['event_name']
 
-    logger1 = drivers.get_logger(cmd_args.log_dir,
+    log_path = pathlib.Path(cmd_args.log_dir)
+    if not log_path.is_dir():
+        log_path.mkdir(parents=True)
+    logger1 = drivers.get_logger(log_path,
                                  drivers.MassExtractor.LOGGER_KEY + '_' + event_name,
                                  cmd_args.output_level)
 
@@ -72,7 +75,7 @@ def main():
                                         DATETIME_PARSER)
     dest_dir = pathlib.Path(cmd_args.output_path) / event_name
     if not dest_dir.is_dir():
-        dest_dir.mkdir()
+        dest_dir.mkdir(parents=True)
 
     logger1.info(f'processing config for event {event_name}')
     logger1.info(f'writing output to {dest_dir}')
@@ -99,7 +102,6 @@ def main():
             driver_init_args['opts'] = data_source_cfg
             driver1 = drivers.extractor_factory(data_source_cfg['data_extractor'],
                                                 driver_init_args)
-            logger1.info(f'Running extract for {data_source_cfg["data_type"]}')
             logger1.info(f'Running extract for {data_source_cfg["data_type"]}')
             driver1.extract()
             logger1.info(f'Running prepare for {data_source_cfg["data_type"]}')

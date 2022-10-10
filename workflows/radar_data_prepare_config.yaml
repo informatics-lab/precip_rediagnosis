@@ -1,0 +1,70 @@
+resources:
+  setup:
+    config:
+      data_path: "/Users/dpeterk/data/PRd"
+      radar_fname_prefix: prd_radar
+      rainfall_thresholds:
+        "0.25":
+          - 0.0
+          - 0.5
+        "2.5":
+          - 0.5
+          - 4.0
+        "7.0":
+          - 4.0
+          - 10.0
+        "10.0":
+          - 10.0
+          - 220.0
+  regrid:
+    config:
+      var_names:
+      - radar_fraction_in_band_aggregate_3hr
+      - radar_fraction_in_band_instant
+      - bands_mask
+      - scalar_value_mask
+      - radar_max_rain_aggregate_3hr
+      - radar_mean_rain_aggregate_3hr
+      - radar_max_rain_instant
+      - radar_mean_rain_instant
+      - fraction_sum_agg
+      - fraction_sum_instant
+      var_types:
+      - VECTOR
+      - VECTOR
+      - MASK_VECTOR
+      - MASK_SCALAR
+      - SCALAR
+      - SCALAR
+      - SCALAR
+      - SCALAR
+      - SCALAR
+      - SCALAR
+      output_long_names:
+      - 'Fraction radar rainfall cells in specified 3hr aggregate rain band'
+      - 'Fraction radar rainfall cells in specified instant rain band'
+      - 'none'
+      - 'none'
+      - 'maximum rain in radar cells within mogreps-g cell'
+      - 'average rain in radar cells within mogreps-g cell'
+      - 'maximum rain in radar cells within mogreps-g cell'
+      - 'average rain in radar cells within mogreps-g cell'
+      - 'Sum of fractions for each cell for aggregate 3hr data'
+      - 'Sum of fractions for each cell for instant precip data'
+ops:
+  dates_to_extract:
+    config:
+      datetime_str: "%Y-%m-%dT%H:%MZ"
+      archive_time_chunk: 24
+      event_start: 2020-02-14T18:00Z
+      event_end: 2020-02-17T18:00Z
+  load_input_dataset:
+    config:
+      dataset_filename_template: "nimrod_ng_radar_{product}_{dt.year:04d}{dt.month:02d}{dt.day:02d}.nc"
+      product: rainrate_composite
+  locate_target_grid_cube:
+    config:
+      filename: "target_cube.nc"
+  filename_timestamp:
+    config:
+      date_fname_template: "{start.year:04d}{start.month:02d}{start.day:02d}T{start.hour:02d}{start.minute:02d}Z_{end.year:04d}{end.month:02d}{end.day:02d}T{end.hour:02d}{end.minute:02d}Z"

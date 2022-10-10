@@ -1,0 +1,44 @@
+resources:
+  setup:
+    config:
+      mass_root: moose:/adhoc/projects/radar_archive/data/comp/products/composites/
+      retrieve_path_root: /scratch/dkillick/precip_rediagnosis/radar/
+      workflow_path: tmp
+      sep: " :: "
+      logdir: "."
+      logfile: retrieved.log
+      products:
+        - nimrod_ng_radar_rainrate_composite
+        - nimrod_ng_radar_qualityproduct_composite
+ops:
+  dates_to_extract:
+    config:
+      datetime_str: "%Y-%m-%dT%H:%MZ"
+      archive_time_chunk: 24
+      event_start: 2020-02-14T18:00Z
+      event_end: 2020-02-17T18:00Z
+  get_mass_paths:
+    config:
+      mass_filename_template: "{dt.year:04d}{dt.month:02d}{dt.day:02d}.tar"
+  save_radar_day_cube:
+    config:
+      variable_fname_template: "{timestamp}_{product}_{resolution}_{area}"
+      nc_fname_template: "{product}_{date_str}.nc"
+      variable_fname_resolution: 1km
+      variable_fname_area: UK
+  mass_retrieve_and_extract:
+    ops:
+      retrieve_from_mass_command:
+        config:
+          mass_get_cmd: moo get {args} {src_paths} {dest_path}
+          mass_get_args: -f
+      extract_mass_retrieval_command:
+        config:
+          untar_cmd: tar -xf {path} --directory {dest_root}
+      filter_mass_retrieval_command:
+        config:
+          unzip_cmd: gunzip -c {zip_file} > {dest_path}
+          variable_fname_timestamp: "*"
+          variable_fname_template: "{timestamp}_{product}_{resolution}_{area}.gz"
+          variable_fname_resolution: 1km
+          variable_fname_area: UK
