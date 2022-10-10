@@ -105,7 +105,7 @@ def train_model(model, data_splits, hyperparameter_dict, log_dir):
     
     class_weights = None
     if 'class_weights' in hyperparameter_dict:
-        class_weights = hyperparamter_dict['class_weights']
+        class_weights = hyperparameter_dict['class_weights']
         
     history = model.fit(data_splits['X_train'], 
                         data_splits['y_train'], 
@@ -368,7 +368,7 @@ def preprocess_data(input_data, feature_dict, test_fraction=0.2):
     
     print(data_dims_dict)
     random_state = np.random.RandomState() 
-    mlflow.log_metric('random state', random_state)
+    # mlflow.log_metric('random state', random_state)
 
     # Extract and return train and validate datasets
     train_df, val_df = random_time_space_sample(
