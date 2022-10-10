@@ -13,7 +13,7 @@ import iris
 import iris.cube
 import iris.quickplot
 import iris.coord_categorisation
-import cf_units
+# import cf_units
 
 def calc_dates_list(start_datetime, end_datetime, delta_hours, tz_str='UTC'):
     dates_to_extract = list(pandas.date_range(
