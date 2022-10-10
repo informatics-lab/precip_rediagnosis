@@ -28,7 +28,7 @@ def get_args():
     parser.add_argument('--batch-size', dest='batch_size', type=int)
     parser.add_argument('--learning-rate', dest='learning_rate', type=float)
     parser.add_argument('--test-fraction', dest='test_fraction', type=float)
-    parser.add_argument('--test-filename', dest='test_filename')
+    # parser.add_argument('--test-filename', dest='test_filename')
     parser.add_argument('--log-dir', dest='log_dir')
     parser.add_argument('--data-path',dest='data_path')
     parser.add_argument('--blob',dest='from_blobstore',action='store_true')
