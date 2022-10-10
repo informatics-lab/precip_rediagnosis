@@ -3,12 +3,10 @@ import argparse
 import tempfile
 import pathlib
 
-import logging
-import tempfile
-
 # third party imports
 import numpy as np
 import pandas as pd
+
 import tensorflow as tf
 from tensorflow.keras.layers import Dense, Activation, Flatten
 from tensorflow.keras.layers import Conv1D, concatenate
@@ -28,18 +26,12 @@ from sklearn.metrics import mean_absolute_error, r2_score
 import mlflow
 
 # azure specific imports
-
-<<<<<<< HEAD
-import azureml.core
-# import fsspec
-=======
 try:
     import azureml.core
     USING_AZML=True
 except ImportError:
     print('AzureML libraries not found, using local execution functions.')
     USING_AZML=False
->>>>>>> 7fde3a0ff333d7d137ecdfc91c7d70dd216278b9
 
 import fsspec
 import pickle
@@ -52,6 +44,7 @@ CSV_FILE_SUFFIX = 'csv'
 def setup_logging():
     mlflow.tensorflow.autolog(log_model_signatures=True)
 
+    
 def build_model(nprof_features, nheights, nsinglvl_features, nbands):
     """
     This 1D convoluational neural network take a regression approach to predict 
@@ -74,6 +67,11 @@ def build_model(nprof_features, nheights, nsinglvl_features, nbands):
     out = Flatten()(x)
     out = Dense(prof_size, use_bias=False, activation='relu')(out)
 
+    if nbands == 1:
+        activation = 'linear'
+    else:
+        activation = 'softmax'
+    
     if nsinglvl_features > 0:
         surf_input = Input(shape=(nsinglvl_features,), name='surf_input')
         flat_profs = Flatten()(profile_input)
@@ -85,11 +83,11 @@ def build_model(nprof_features, nheights, nsinglvl_features, nbands):
         x = Dense(1024, use_bias=False, activation='relu')(x)
         x = Dense(1024, use_bias=False, activation='relu')(x)
         
-        main_output = Dense(nbands, use_bias=True, activation='linear', name='main_output')(x)
+        main_output = Dense(nbands, use_bias=True, activation=activation, name='main_output')(x)
         model = Model(inputs=[profile_input, surf_input], outputs=[main_output])
 
     else:
-        main_output = Dense(nbands, activation='linear', name='main_output')(out) # use_bias=True, 
+        main_output = Dense(nbands, activation=activation, name='main_output')(out) # use_bias=True, 
         model = Model(inputs=[profile_input], outputs=[main_output])
         
     return model
@@ -100,22 +98,31 @@ def train_model(model, data_splits, hyperparameter_dict, log_dir):
     This function trains the input model with the given data samples in data_splits. 
     Hyperparameters use when fitting the model are defined in hyperparameter_dict.
     """
-    
     tf_callbacks = [tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)]
-    mlflow.log_param('learning_rate', hyperparameter_dict['learning_rate'])
-    mlflow.log_param('batch_size', hyperparameter_dict['batch_size'])
     
     optimizer = tf.keras.optimizers.Adam(learning_rate=hyperparameter_dict['learning_rate'])
-    model.compile(loss='mean absolute error', optimizer=optimizer)
-
+    model.compile(loss=hyperparameter_dict['loss'], optimizer=optimizer, metrics=['accuracy'])
+    
+    class_weights = None
+    if 'class_weights' in hyperparameter_dict:
+        class_weights = hyperparamter_dict['class_weights']
+        
     history = model.fit(data_splits['X_train'], 
                         data_splits['y_train'], 
                         epochs=hyperparameter_dict['epochs'], 
                         batch_size=hyperparameter_dict['batch_size'], 
                         validation_data=(data_splits['X_val'], data_splits['y_val']), 
+                        class_weight=class_weights,
                         callbacks=tf_callbacks,
                         verbose=True)
-    return model
+    return model, history
+
+
+def log_history(history):
+    prd_run = azureml.core.Run.get_context()
+    # for k1, v1 in model.history.history.items():
+    for k1, v1 in history.history.items():
+        prd_run.log(k1, v1[-1])
     
 
 def load_data_local(dataset_dir):
@@ -125,8 +132,24 @@ def load_data_local(dataset_dir):
     merged_df = pd.concat([pd.read_csv(p1) for p1 in prd_path_list])
     return merged_df
 
+
+def log_history(history):
+    prd_run = azureml.core.Run.get_context()
+    # for k1, v1 in model.history.history.items():
+    for k1, v1 in history.history.items():
+        prd_run.log(k1, v1[-1])
+
+
+def load_data_local(dataset_dir):
+    print('loading all event data')
+    dataset_dir = pathlib.Path(dataset_dir)
+    prd_path_list = [p1 for p1 in dataset_dir.rglob(f'{MERGED_PREFIX}*{CSV_FILE_SUFFIX}') ]
+    merged_df = pd.concat([pd.read_csv(p1) for p1 in prd_path_list])
+    return merged_df
+
+
 if USING_AZML:
-    
+
     def load_data_azml_dataset(dataset_name):
         """
         This function loads data from AzureML storage and returns it as a pandas dataframe 
@@ -145,6 +168,7 @@ if USING_AZML:
             merged_df = pd.concat([pd.read_csv(p1) for p1 in prd_path_list])
         return merged_df
     
+
 def load_data_azure_blob(az_blob_cred, blob_path):
     """
     Load data direct from a blob store. Need to provide credentials
@@ -181,14 +205,12 @@ def load_data_azure_blob(az_blob_cred, blob_path):
 
     prd_merged_df = pd.concat(csv_list)
     return prd_merged_df
-    
 
-    # create a load data function that takes a path on disk through the DatasetConfigConsumption object created by calling
-    # mydataset.as_download
-    # wheich get passed as an argument to the script
-    # argument will then contain the path to the folder with the files
+# create a load data function that takes a path on disk through the DatasetConfigConsumption object created by calling
+# mydataset.as_download
+# wheich get passed as an argument to the script
+# argument will then contain the path to the folder with the files
     
-        
 
 def random_sample(df, test_fraction, random_state):
     """
@@ -200,7 +222,6 @@ def random_sample(df, test_fraction, random_state):
     test_df = df.sample(
         int(n_samples*test_fraction), random_state=random_state)
     train_df = df[~np.isin(df.index, test_df.index)]
-<<<<<<< HEAD
     return train_df, test_df
 
 
@@ -216,8 +237,20 @@ def random_time_space_sample(df, test_fraction, random_state, sampling_columns):
 
     test_df = samples_labelled[samples_labelled._merge=='both'].drop(columns='_merge', axis=1)
     train_df = samples_labelled[samples_labelled._merge=='left_only'].drop(columns='_merge', axis=1)
-=======
- 
+    
+    return train_df, test_df
+
+
+def sample_data_by_time(df, test_fraction=0.2, test_save=None, random_state=None):
+    """
+    Sample test and train datasets by selecting the last 20% of timesteps in the data for testing
+    """
+    n_timesteps = df.time.unique().size
+    test_samples = np.round(n_timesteps / (1 / test_fraction)).astype('int')
+    test_mask = np.isin(df['time'], df['time'].unique()[-test_samples:])
+    test_df = df[test_mask]
+    train_df = df[~test_mask]
+    
     if test_save:
         container = test_save['datastore_credentials']['container']
         acc_name = test_save['datastore_credentials']['storage_acc_name']
@@ -233,23 +266,7 @@ def random_time_space_sample(df, test_fraction, random_state, sampling_columns):
         #     train_df.to_csv(trainfn)
     else: 
         return train_df, test_df
->>>>>>> 7fde3a0ff333d7d137ecdfc91c7d70dd216278b9
-    
-    return train_df, test_df
 
-
-def sample_data_by_time(df, test_fraction=0.2, test_save=None, random_state=None):
-    """
-    Sample test and train datasets by selecting the last 20% of timesteps in the data for testing
-    """
-    n_timesteps = df.time.unique().size
-    test_samples = np.round(n_timesteps / (1 / test_fraction)).astype('int')
-    test_mask = np.isin(df['time'], df['time'].unique()[-test_samples:])
-    test_df = df[test_mask]
-    train_df = df[~test_mask]
-
-    return train_df, test_df
-   
 
 def reshape_profile_features(df, features, data_dims_dict):
     """
@@ -320,8 +337,6 @@ def preprocess_data(input_data, feature_dict, test_fraction=0.2):
     data = input_data.dropna()
     data = data[data['radar_mean_rain_instant'] < 50]  # remove any spuriously high radar data point
     
-    data.reset_index(inplace=True)
-    
     print(f"target has dims: {len(feature_dict['target'])}")
     if isinstance(feature_dict['target'], list):
         print(f"dropping smallest bin: {feature_dict['target'][0]}")
@@ -339,21 +354,22 @@ def preprocess_data(input_data, feature_dict, test_fraction=0.2):
     # Get a list of columns names for profile features
     print('getting profile columns')
     prof_feature_columns = get_profile_columns(feature_dict['profile'], data.columns)
-    # print(prof_feature_columns)
-    
-    print(feature_dict)
+
     data_dims_dict = {
         'nprof_features' : len(feature_dict['profile']),
         'nheights' : len(prof_feature_columns)//len(feature_dict['profile']),
         'nsinglvl_features' :len(feature_dict['single_level']),
     }
+    
     if isinstance(feature_dict['target'], list):
         data_dims_dict['nbands'] = len(feature_dict['target'])
     else:
         data_dims_dict['nbands'] = 1
     
-    random_state = np.random.RandomState()  # TO DO: how to log this in experiments!
-    
+    print(data_dims_dict)
+    random_state = np.random.RandomState() 
+    mlflow.log_metric('random state', random_state)
+
     # Extract and return train and validate datasets
     train_df, val_df = random_time_space_sample(
         data,
@@ -376,8 +392,6 @@ def preprocess_data(input_data, feature_dict, test_fraction=0.2):
     # Scale data to have zero mean and standard deviation of one
     standardScaler = StandardScaler()
 
-    # import pdb
-    # pdb.set_trace()
     X_train_scaled = pd.DataFrame(
         standardScaler.fit_transform(X_train), 
         columns=X_train.columns,
@@ -388,7 +402,9 @@ def preprocess_data(input_data, feature_dict, test_fraction=0.2):
         columns=X_val.columns,
         index=X_val.index)
 
-    #TODO: we should rather not save kicles if possible, theres no guarentee of being able to load in future. Would be better to save parameters as a JSON. We could probably save as a metric with the run so we can load in the same parameters when loading a saved model
+    #TODO: we should rather not save pickle if possible, theres no guarentee of being able to 
+    # load in future. Would be better to save parameters as a JSON. We could probably save as 
+    # a metric with the run so we can load in the same parameters when loading a saved model
     with open('standardScaler.pkl', 'wb') as fout:
         pickle.dump(standardScaler, fout)
 
@@ -418,9 +434,6 @@ def calc_metrics(data_splits, y_pred):
     for k1, v1 in metrics_dict.items():
         mlflow.log_metric(k1, v1)
     return metrics_dict
-<<<<<<< HEAD
-=======
-
 
 
 def save_model(model, prd_model_name):
@@ -438,6 +451,7 @@ if USING_AZML:
         for k1, v1 in metrics_dict.items():
             current_run.log(k1, v1)
         return metrics_dict
+
 
     def save_model_azml(model, prd_model_name):
         prd_run = azureml.core.Run.get_context()
@@ -459,5 +473,3 @@ if USING_AZML:
             model.save(model_save_path)
             prd_run.upload_folder(name=prd_model_name, path=str(model_save_path))
             prd_run.register_model(prd_model_name, prd_model_name + '/')
-    
->>>>>>> 7fde3a0ff333d7d137ecdfc91c7d70dd216278b9
