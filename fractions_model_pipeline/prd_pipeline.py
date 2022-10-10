@@ -119,6 +119,20 @@ def log_history(history):
     # for k1, v1 in model.history.history.items():
     for k1, v1 in history.history.items():
         prd_run.log(k1, v1[-1])
+    
+
+def load_data_local(dataset_dir):
+    print('loading all event data')
+    dataset_dir = pathlib.Path(dataset_dir)
+    prd_path_list = [p1 for p1 in dataset_dir.rglob(f'{MERGED_PREFIX}*{CSV_FILE_SUFFIX}') ]
+    merged_df = pd.concat([pd.read_csv(p1) for p1 in prd_path_list])
+    return merged_df
+
+def log_history(history):
+    prd_run = azureml.core.Run.get_context()
+    # for k1, v1 in model.history.history.items():
+    for k1, v1 in history.history.items():
+        prd_run.log(k1, v1[-1])
 
 
 def load_data_local(dataset_dir):
