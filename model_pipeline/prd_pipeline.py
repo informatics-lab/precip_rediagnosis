@@ -103,16 +103,16 @@ def train_model(model, data_splits, hyperparameter_dict, log_dir):
     optimizer = tf.keras.optimizers.Adam(learning_rate=hyperparameter_dict['learning_rate'])
     model.compile(loss=hyperparameter_dict['loss'], optimizer=optimizer, metrics=['accuracy'])
     
-    class_weights = None
-    if 'class_weights' in hyperparameter_dict:
-        class_weights = hyperparameter_dict['class_weights']
+    # class_weights = None
+    # if 'class_weights' in hyperparameter_dict:
+    #     class_weights = hyperparameter_dict['class_weights']
         
     history = model.fit(data_splits['X_train'], 
                         data_splits['y_train'], 
                         epochs=hyperparameter_dict['epochs'], 
                         batch_size=hyperparameter_dict['batch_size'], 
                         validation_data=(data_splits['X_val'], data_splits['y_val']), 
-                        class_weight=class_weights,
+                        # class_weight=class_weights,
                         callbacks=tf_callbacks,
                         verbose=True)
     return model, history
@@ -289,12 +289,51 @@ def get_profile_columns(profile_vars, columns):
     return [s for s in columns for vars in profile_vars if s.startswith(vars)]
 
 
-def load_test_data(test_fn, feature_dict, data_dims_dict):
+def calculate_permutation_feature_importance(model, data_splits, feature_dict, baseline_metric, npermutations):
+    # permute by shuffling data
+    feature_names = feature_dict['profile'] + feature_dict['single_level']
+    permutation_importance = {key:[] for key in feature_names}
+    
+    for ifeature, feature in enumerate(feature_names):
+        print(f'permuting feature: {feature}')
+        for iperm in np.arange(npermutations):
+            if len(feature_dict['single_level']) > 0:
+                X_val_permute = [data_splits['X_val'][0].copy(), data_splits['X_val'][1].copy()]
+                if feature in feature_dict['single_level']:
+                    X_val_permute[1][feature] = X_val_permute[1][feature].reindex(
+                        np.random.permutation(X_val_permute[1][feature].index)).values
+                else:
+                    X_val_permute[0][..., ifeature] = np.take(
+                        X_val_permute[0][..., ifeature],
+                        indices=np.random.permutation(X_val_permute[0].shape[0]),
+                        axis=0)
+
+            else:
+                X_val_permute = data_splits['X_val'].copy()
+                X_val_permute[..., ifeature] = np.take(
+                    X_val_permute[..., ifeature],
+                    indices=np.random.permutation(X_val_permute.shape[0]),
+                    axis=0)
+
+            y_pred = model.predict(X_val_permute)
+
+            permuted_metric = tf.keras.metrics.KLDivergence()
+            permuted_metric.update_state(data_splits['y_val'], y_pred)
+            permuted_metric = permuted_metric.result().numpy()
+
+            permutation_importance[feature].append(permuted_metric - baseline_metric)
+    return permutation_importance
+
+
+def load_test_data(test_data, feature_dict, data_dims_dict):
     """
     This function can be used to load in test data and returns 
     input and target data ready to be used to test an ML model.
     """
-    test_data = pd.read_csv(test_fn)
+
+    if isinstance(test_data, str):
+        test_data = pd.read_csv(test_data)
+
     with open('standardScaler.pkl', 'rb') as fin:
         standardScaler = pickle.load(fin)
 
@@ -303,7 +342,7 @@ def load_test_data(test_fn, feature_dict, data_dims_dict):
     y_test = test_data[feature_dict['target']]
 
     X_test_scaled = pd.DataFrame(
-        standardScaler.fit_transform(features), 
+        standardScaler.transform(features), 
         columns=features.columns,
         index=features.index)
     
@@ -312,7 +351,9 @@ def load_test_data(test_fn, feature_dict, data_dims_dict):
     if len(feature_dict['single_level']) > 0:
         X_test = [X_test, X_test_scaled[feature_dict['single_level']]]
     
-    return X_test, y_test
+    nwp_test = test_data[feature_dict['nwp']]
+    
+    return X_test, y_test, nwp_test
 
 
 def create_test_train_datasets(data):
@@ -383,11 +424,20 @@ def preprocess_data(input_data, feature_dict, test_fraction=0.2):
     X_val = val_df[prof_feature_columns + feature_dict['single_level']]
     y_val = val_df[feature_dict['target']]
     
+    nwp_train = train_df[feature_dict['nwp']]
+    nwp_val = val_df[feature_dict['nwp']]
+    
     if isinstance(y_train, pd.Series):
         y_train = y_train.to_frame()
     
     if isinstance(y_val, pd.Series):
         y_val = y_val.to_frame()
+        
+    if isinstance(nwp_train, pd.Series):
+        nwp_train = nwp_train.to_frame()
+        
+    if isinstance(nwp_val, pd.Series):
+        nwp_val = nwp_val.to_frame()
     
     # Scale data to have zero mean and standard deviation of one
     standardScaler = StandardScaler()
@@ -421,6 +471,8 @@ def preprocess_data(input_data, feature_dict, test_fraction=0.2):
                    'X_val': X_val,
                    'y_train': y_train,
                    'y_val' : y_val,
+                   'nwp_train' : nwp_train,
+                   'nwp_val' : nwp_val
                   }
 
     return data_splits, data_dims_dict
@@ -434,6 +486,18 @@ def calc_metrics(data_splits, y_pred):
     for k1, v1 in metrics_dict.items():
         mlflow.log_metric(k1, v1)
     return metrics_dict
+
+
+def calculate_fss(y_test, y_pred):
+    """ 
+    The inputs to this function are the cumulative probability/fraction of exceeding a given precipitation threshold
+    y_test is the observed fraction 
+    y_pred is the predicted fraction, either output from ML or NWP model 
+    """
+    FBS = (y_pred - y_test)**2
+    FBS_ref = y_pred**2 + y_test**2
+    FSS = np.mean(1 - (FBS/FBS_ref))
+    return FSS
 
 
 def save_model(model, prd_model_name):
