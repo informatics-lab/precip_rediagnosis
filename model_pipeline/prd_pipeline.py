@@ -467,13 +467,16 @@ def preprocess_data(input_data, feature_dict, test_fraction=0.2):
         X_train = [X_train, X_train_scaled[feature_dict['single_level']]]
         X_val = [X_val, X_val_scaled[feature_dict['single_level']]]
 
-    data_splits = {'X_train': X_train,
-                   'X_val': X_val,
-                   'y_train': y_train,
-                   'y_val' : y_val,
-                   'nwp_train' : nwp_train,
-                   'nwp_val' : nwp_val
-                  }
+    data_splits = {
+        'X_train': X_train,
+        'X_val': X_val,
+        'y_train': y_train,
+        'y_val' : y_val,
+        'nwp_train' : nwp_train,
+        'nwp_val' : nwp_val, 
+        'meta_train': train_df[feature_dict['metadata']],
+        'meta_val': val_df[feature_dict['metadata']],
+    }
 
     return data_splits, data_dims_dict
 
