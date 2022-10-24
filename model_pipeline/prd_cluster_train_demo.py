@@ -9,6 +9,7 @@ import tempfile
 import pathlib
 import numpy as np
 import tensorflow as tf
+import pandas as pd
 
 # NB No AzreML imports in this file!!!
 
@@ -38,6 +39,10 @@ def get_args():
     return args
 
 
+def calc_nwp_probabilities(data, lower_bound, upper_bound):
+    return ((data>=lower_bound) & (data<upper_bound)).sum()/data.shape[0]
+
+
 def main():
     
     args = get_args()
@@ -61,7 +66,26 @@ def main():
             input_data = prd_pipeline.load_data_local(args.data_path)
     else:
         input_data = prd_pipeline.load_data_azml_dataset(args.dataset_name)
-        
+    
+    # ---------
+    # TO DO: move calculation of NWP probabilities in precip intensity bands into data prep 
+    bands = {
+        '0.0':[0, 0.01],
+        '0.25':[0.01, 0.5], 
+        '2.5': [0.5, 4], 
+        '7.0':[4, 10], 
+        '10.0':[10,220]
+    }
+    
+    nwp_fractions = [
+        input_data.groupby(['latitude', 'longitude', 'time'])[['rainfall_rate']].apply(
+            lambda x: calc_nwp_probabilities(x, lower_bound, upper_bound)).rename(columns={'rainfall_rate':intensity_band_template.format(source='mogrepsg', band_centre=intensity_band)})
+        for intensity_band, [lower_bound, upper_bound] in bands.items()]
+    nwp_prob_df = pd.concat(nwp_fractions, axis=1)
+    input_data = pd.merge(input_data, nwp_prob_df, left_on=['latitude', 'longitude', 'time'], right_index=True)
+    # ---------
+    
+    
     df_train, df_test = prd_pipeline.random_time_space_sample(
         input_data, 
         test_fraction=args.test_fraction, 
@@ -69,6 +93,8 @@ def main():
         sampling_columns = ['time', 'latitude', 'longitude']
     )
 
+    
+    
     data_splits, data_dims_dict = prd_pipeline.preprocess_data(
         df_train, 
         feature_dict, 
