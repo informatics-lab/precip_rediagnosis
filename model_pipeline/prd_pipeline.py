@@ -352,8 +352,9 @@ def load_test_data(test_data, feature_dict, data_dims_dict):
         X_test = [X_test, X_test_scaled[feature_dict['single_level']]]
     
     nwp_test = test_data[feature_dict['nwp']]
+    meta_test = test_data[feature_dict['metadata']]
     
-    return X_test, y_test, nwp_test
+    return X_test, y_test, nwp_test, meta_test
 
 
 def create_test_train_datasets(data):
