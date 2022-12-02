@@ -13,6 +13,15 @@
   "merge_vars": [ "latitude", "longitude", "time"],
   "merged_output_prefix": "prd_merged",
   "timezone": "UTC",
+  "data_common": {
+          "rainfall_thresholds": {
+            "0.0": [0.0,0.01],
+             "0.25": [0.01, 0.5],
+             "2.5": [0.5, 4.0],
+             "7.0": [4.0, 10.0],
+             "10.0": [10.0, 220.0]
+          }
+  },
   "data_sources": [
 {
       "data_type": "model_ensemble",
@@ -60,14 +69,7 @@
       },
       "resolution": "1km",
       "area": "UK",
-      "radar_fname_prefix": "prd_radar",
-          "rainfall_thresholds": {
-            "0.0": [0.0,0.01],
-             "0.25": [0.01, 0.5],
-             "2.5": [0.5, 4.0],
-             "7.0": [4.0, 10.0],
-             "10.0": [10.0, 220.0]
-          }
+      "radar_fname_prefix": "prd_radar"
     }
   ]
 }
