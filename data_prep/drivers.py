@@ -275,6 +275,29 @@ class ModelStageExtractor(MassExtractor):
             single_level_ds = xarray.merge( [xarray.DataArray.from_iris(slc1) for slc1 in sl_cubes] )
             single_level_df = single_level_ds.to_dataframe().reset_index()
 
+            # calculate fraction rain band
+            def calc_ensemble_fractions(model_df, lower_bound, upper_bound):
+                return ((model_df >= lower_bound) & (model_df < upper_bound)).sum() / model_df.shape[0]
+
+            intensity_band_template = '{source}_fraction_in_band_instant_{band_centre}'
+
+            rainfall_thresholds = self._opts['rainfall_thresholds']
+            ensemble_fractions = [
+                single_level_df.groupby(['latitude', 'longitude', 'time'])[
+                    ['rainfall_rate']].apply(
+                    lambda x: calc_ensemble_fractions(x, lower_bound,
+                                                     upper_bound)).rename(
+                    columns={'rainfall_rate': intensity_band_template.format(
+                        source='mogrepsg', band_centre=intensity_band)})
+                for intensity_band, [lower_bound, upper_bound] in
+                rainfall_thresholds.items()]
+            ensemble_fractions_df = pandas.concat(ensemble_fractions, axis=1)
+            single_level_df = pandas.merge(single_level_df,
+                                           ensemble_fractions_df,
+                                 left_on=['latitude', 'longitude', 'time'],
+                                 right_index=True)
+
+
             height_levels_ds = xarray.merge([load_ds(
                 ds_path=output_dir / fname_template.format(vt=validity_time,
                                                                    lead_time=leadtime_hours,
