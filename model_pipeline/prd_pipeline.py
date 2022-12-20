@@ -2,10 +2,12 @@
 import argparse
 import tempfile
 import pathlib
+import datetime
 
 # third party imports
 import numpy as np
 import pandas as pd
+import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 import cartopy.crs as ccrs
@@ -105,17 +107,12 @@ def train_model(model, data_splits, hyperparameter_dict, log_dir):
     
     optimizer = tf.keras.optimizers.Adam(learning_rate=hyperparameter_dict['learning_rate'])
     model.compile(loss=hyperparameter_dict['loss'], optimizer=optimizer, metrics=['accuracy'])
-    
-    # class_weights = None
-    # if 'class_weights' in hyperparameter_dict:
-    #     class_weights = hyperparameter_dict['class_weights']
         
     history = model.fit(data_splits['X_train'], 
                         data_splits['y_train'], 
                         epochs=hyperparameter_dict['epochs'], 
                         batch_size=hyperparameter_dict['batch_size'], 
                         validation_data=(data_splits['X_val'], data_splits['y_val']), 
-                        # class_weight=class_weights,
                         callbacks=tf_callbacks,
                         verbose=True)
     return model, history
@@ -286,7 +283,7 @@ def calculate_permutation_feature_importance(model, data_splits, feature_dict, b
         print(f'permuting feature: {feature}')
         for iperm in np.arange(npermutations):
             if len(feature_dict['single_level']) > 0:
-                X_val_permute = [data_splits['X_val'][0].copy(), data_splits['X_val'][1].copy()]
+                X_val_permute = [data_splits['X_test'][0].copy(), data_splits['X_test'][1].copy()]
                 if feature in feature_dict['single_level']:
                     X_val_permute[1][feature] = X_val_permute[1][feature].reindex(
                         np.random.permutation(X_val_permute[1][feature].index)).values
@@ -297,7 +294,7 @@ def calculate_permutation_feature_importance(model, data_splits, feature_dict, b
                         axis=0)
 
             else:
-                X_val_permute = data_splits['X_val'].copy()
+                X_val_permute = data_splits['X_test'].copy()
                 X_val_permute[..., ifeature] = np.take(
                     X_val_permute[..., ifeature],
                     indices=np.random.permutation(X_val_permute.shape[0]),
@@ -306,11 +303,18 @@ def calculate_permutation_feature_importance(model, data_splits, feature_dict, b
             y_pred = model.predict(X_val_permute)
 
             permuted_metric = tf.keras.metrics.KLDivergence()
-            permuted_metric.update_state(data_splits['y_val'], y_pred)
+            permuted_metric.update_state(data_splits['y_test'], y_pred)
             permuted_metric = permuted_metric.result().numpy()
 
             permutation_importance[feature].append(permuted_metric - baseline_metric)
     return permutation_importance
+
+
+def unify_dates(date_str):
+    try:
+        return datetime.datetime.strptime(date_str, '%Y-%m-%d %H:%M:%S').strftime('%Y-%m-%d %H:%M:%S')
+    except: 
+        return datetime.datetime.strptime(date_str, '%Y-%m-%d').strftime('%Y-%m-%d %H:%M:%S')
 
 
 def preprocess_test_data(test_data, feature_dict, data_dims_dict):
@@ -319,8 +323,10 @@ def preprocess_test_data(test_data, feature_dict, data_dims_dict):
     input and target data ready to be used to test an ML model.
     """
 
-    if isinstance(test_data, str):
+    if isinstance(test_data, pathlib.PosixPath):
         test_data = pd.read_csv(test_data)
+    
+    test_data['time'] = test_data.time.apply(lambda x: unify_dates(x))
 
     with open('standardScaler.pkl', 'rb') as fin:
         standardScaler = pickle.load(fin)
@@ -377,7 +383,7 @@ def preprocess_data(input_data, feature_dict, test_fraction=0.2):
     
     print(f"target has dims: {len(feature_dict['target'])}")
     if isinstance(feature_dict['target'], list):
-        print(f"dropping smallest bin: {feature_dict['target'][0]}")
+        print(f"dropping datapoints where smallest bin {feature_dict['target'][0]} = 1")
         # If feature_dict['target'] is length greater than 1, then the target 
         # is a set of intensity bands and so we drop data where the
         # smallest intensity band has a fraction of 1 
@@ -617,26 +623,28 @@ def plot_metric_on_map(xrds, threshold, metric):
     if metric == 'freq_bias':
         if vmin == 0:
             vmin=0.00001
-        norm = LogNorm()
+        norm = matplotlib.colors.CenteredNorm(vcenter=1.0)
+        cmap = matplotlib.cm.RdBu_r
     elif metric == 'fss':
         vmin = max(vmin, 0)
         vmax = min(vmax, 1)
+        cmap = matplotlib.cm.viridis
    
     # plot with three subplots
     # the first two panels shows radar and nwp data and final panel shows the difference
     fig, ax = plt.subplots(1, 3, subplot_kw={'projection': ccrs.Mercator()}, figsize=(15,5))
     
     extent= (-5.65, 1.7800, 49.9600, 55.65)
-    ml_data.plot.pcolormesh(ax=ax[0], transform=ccrs.PlateCarree(), vmin=vmin, vmax=vmax, norm=norm)
+    ml_data.plot.pcolormesh(ax=ax[0], transform=ccrs.PlateCarree(), cmap=cmap, norm=norm)
     ax[0].set_extent(extent)
     ax[0].coastlines()
 
-    nwp_data.plot.pcolormesh(ax=ax[1], transform=ccrs.PlateCarree(), vmin=vmin, vmax=vmax, norm=norm)
+    nwp_data.plot.pcolormesh(ax=ax[1], transform=ccrs.PlateCarree(), cmap=cmap, norm=norm)
     ax[1].set_extent(extent)
     ax[1].coastlines()
     
     diff = ml_data - nwp_data
-    diff.plot.pcolormesh(ax=ax[2], transform=ccrs.PlateCarree())
+    diff.plot.pcolormesh(ax=ax[2], cmap=cmap, transform=ccrs.PlateCarree(), norm=matplotlib.colors.CenteredNorm(vcenter=0.0))
     ax[2].set_extent(extent)
     ax[2].coastlines()
 
@@ -702,3 +710,67 @@ def postage_stamp_plot(datadf, threshold, time_idx, bands):
             j = 0
     fig.suptitle(f'ML fraction of precip > {bands[threshold][1]}mm  \n {test_timeslice.time.values}')
     plt.show()
+    
+
+def metric_barchart(ml_metric, nwp_metric, class_names, plot_annotations):
+    x = np.arange(len(class_names))  # the label locations
+    width = 0.3  # the width of the bars
+
+    fig, ax = plt.subplots(figsize=(7,5.5))
+    ax.bar(x + width/2, ml_metric, width, label='ML')
+    ax.bar(x - width/2, nwp_metric, width, label='NWP')
+    
+    rects = ax.patches
+    for rect in rects:
+        height = rect.get_height()
+        ax.text(
+            rect.get_x() + rect.get_width() / 2, height, height.round(2), ha="center", va="bottom"
+        )
+    # Add some text for labels, title and custom x-axis tick labels, etc.
+    
+    plt.xticks(np.arange(5), class_names, rotation=45)
+    ax.legend()
+    
+    ax.set_ylabel(plot_annotations['ylabel'])
+    ax.set_xlabel(plot_annotations['xlabel'])
+    ax.set_title(plot_annotations['title'])
+
+    fig.tight_layout()
+
+    return fig, ax
+
+
+def make_saliency_map(img_array, model, last_conv_layer_name, pred_index=None):
+    # First, we create a model that maps the input image to the activations
+    # of the last conv layer as well as the output predictions
+    grad_model = tf.keras.models.Model(
+        [model.inputs], [model.get_layer(last_conv_layer_name).output, model.output]
+    )
+
+    # Then, we compute the gradient of the top predicted class for our input image
+    # with respect to the activations of the last conv layer
+    with tf.GradientTape() as tape:
+        last_conv_layer_output, preds = grad_model(img_array)
+        if pred_index is None:
+            pred_index = tf.argmax(preds)
+        
+        class_channel = preds[:,pred_index]
+
+    # This is the gradient of the output neuron (top predicted or chosen)
+    # with regard to the output feature map of the last conv layer
+    grads = tape.gradient(class_channel, last_conv_layer_output)
+
+    # This is a vector where each entry is the mean intensity of the gradient
+    # over a specific feature map channel
+    pooled_grads = tf.reduce_mean(grads, axis=(0,1))
+
+    # We multiply each channel in the feature map array
+    # by "how important this channel is" with regard to the top predicted class
+    # then sum all the channels to obtain the heatmap class activation
+    last_conv_layer_output = last_conv_layer_output[0]
+    heatmap = last_conv_layer_output @ pooled_grads[..., tf.newaxis]
+    heatmap = tf.squeeze(heatmap)
+
+    # For visualization purpose, we will also normalize the heatmap between 0 & 1
+    heatmap = tf.maximum(heatmap, 0) / tf.math.reduce_max(heatmap)
+    return heatmap.numpy()
