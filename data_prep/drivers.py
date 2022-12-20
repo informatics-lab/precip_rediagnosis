@@ -155,6 +155,7 @@ class MassExtractor():
 
 
 class ModelStageExtractor(MassExtractor):
+    TOTAL_PRECIP_VAR_NAME = 'total_precip_rate'
 
     def __init__(self, opts_dict):
         super().__init__(opts_dict=opts_dict)
@@ -252,6 +253,10 @@ class ModelStageExtractor(MassExtractor):
                                       longitude=lambda c1: uk_bounds['longitude'][0] < c1.point <= uk_bounds['longitude'][1])
 
         ts_data_list = []
+
+        precip_vars = [v1 for k1,v1 in file_to_var_mapping.items() if 'snowfall' in v1 or 'rainfall' in v1]
+        precip_rate_vars = [p1 for p1 in precip_vars if 'rate' in p1]
+
         for validity_time in self._target_time_range:
             self.logger.info(f'processing model data for time {validity_time}')
 
@@ -261,19 +266,41 @@ class ModelStageExtractor(MassExtractor):
             # read in the data into iris so we can convert the units if required
             sl_cubes = [iris.load_cube(str(sl_path), uk_bounds_constraint) for sl_path in sl_paths]
 
-            # fix the units of all rain and snow cubes to match the radar units
-            # import pdb
-            # pdb.set_trace()
-
             for cube1 in sl_cubes:
-                if 'thickness' in cube1.name() and ('rainfall' in cube1.name() or 'snowfall' in cube1.name()):
+                cube_name = cube1.name()
+                if 'thickness' in cube_name and cube_name in precip_vars:
                     cube1.convert_units('mm')
-                if 'rate' in cube1.name() and ('rainfall' in cube1.name() or 'snowfall' in cube1.name()):
+                if 'rate' in cube1.name() and cube_name in precip_vars:
                     cube1.convert_units('mm/h')
 
             # then convert into xarray for easier merging and converting into a dataframe
             single_level_ds = xarray.merge( [xarray.DataArray.from_iris(slc1) for slc1 in sl_cubes] )
             single_level_df = single_level_ds.to_dataframe().reset_index()
+
+            single_level_df[ModelStageExtractor.TOTAL_PRECIP_VAR_NAME] = single_level_df[precip_rate_vars].sum(axis='columns')
+
+            # calculate fraction rain band
+            def calc_ensemble_fractions(model_df, lower_bound, upper_bound):
+                return ((model_df >= lower_bound) & (model_df < upper_bound)).sum() / model_df.shape[0]
+
+            intensity_band_template = '{source}_fraction_in_band_instant_{band_centre}'
+
+            rainfall_thresholds = self._opts['rainfall_thresholds']
+            ensemble_fractions = [
+                single_level_df.groupby(['latitude', 'longitude', 'time'])[
+                    [ModelStageExtractor.TOTAL_PRECIP_VAR_NAME]].apply(
+                    lambda x: calc_ensemble_fractions(x, lower_bound,
+                                                     upper_bound)).rename(
+                    columns={ModelStageExtractor.TOTAL_PRECIP_VAR_NAME: intensity_band_template.format(
+                        source='mogrepsg', band_centre=intensity_band)})
+                for intensity_band, [lower_bound, upper_bound] in
+                rainfall_thresholds.items()]
+            ensemble_fractions_df = pandas.concat(ensemble_fractions, axis=1)
+            single_level_df = pandas.merge(single_level_df,
+                                           ensemble_fractions_df,
+                                 left_on=['latitude', 'longitude', 'time'],
+                                 right_index=True)
+
 
             height_levels_ds = xarray.merge([load_ds(
                 ds_path=output_dir / fname_template.format(vt=validity_time,
