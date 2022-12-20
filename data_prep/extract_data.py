@@ -94,12 +94,15 @@ def main():
         'event_name': event_name,
         'timezone': dataset_config['timezone'],
     }
-    driver_list = []
+    data_common_args = dataset_config['data_common']
 
+    driver_list = []
     try:
         for data_source_cfg in dataset_config['data_sources']:
             logger1.info(f'processing data source of type {data_source_cfg["data_type"]}')
-            driver_init_args['opts'] = data_source_cfg
+            driver_init_args['opts'] = dict(data_source_cfg)
+            driver_init_args['opts'].update (data_common_args)
+
             driver1 = drivers.extractor_factory(data_source_cfg['data_extractor'],
                                                 driver_init_args)
             logger1.info(f'Running extract for {data_source_cfg["data_type"]}')
