@@ -19,19 +19,19 @@ Jupyter notebooks are used to demonstrate techniques, tools and algorithms used 
 ### Batch processing files
 While the above notebook present an annotated version of the key algorithms, the actual processing of data is done in a series of scripts. These are designed to be extensible so further work can add data sources and processes without disturbing existing code. 
 
-* [extract_data.py] - The main entry point for running the data extraction and preparation steps
-* [drivers.py] - Contains classes that derive from a `MassExtractor` parent class, which primarily have `extract()` and `prepare()` which prepares a dataframe from a particular data source. 
-* [event_configs] - A directory containing descriptions of events for which precip data is to be extracted. Each event is described in a json file which includes general info such as the start and end dates of the event, as well as a description of each source to be extracted.
+* [extract_data.py](extract_data.py) - The main entry point for running the data extraction and preparation steps
+* [drivers.py](drivers.py) - Contains classes that derive from a `MassExtractor` parent class, which primarily have `extract()` and `prepare()` which prepares a dataframe from a particular data source. 
+* [event_configs](event_configs) - A directory containing descriptions of events for which precip data is to be extracted. Each event is described in a json file which includes general info such as the start and end dates of the event, as well as a description of each source to be extracted.
   *Currently these are primarily `ModelStageExtractor` which can process model data produced by stage from archive, and `RadarExtractor` which can process archived radar data.
 * to facilitate batch processing, which runs on the Met Office Linux cluster, there are a number of helper shell scripts:
-  * [run_all_events.sh] - High level script to run processing for each of the event config json files and runs a batch job per event
-  * [run_data_prep_spice.sh] - A script for running processing for a single event.
-  * [submit_data_prep_spice.sh] - A helper script for running `run_data_prep_spice.sh` through the batch submission system.
-  * [run_interactively.sh] - a helper script to be able to debug code by setting up the same environment as in `submit_data_prep_spice.sh`.
+  * [run_all_events.sh](run_all_events.sh) - High level script to run processing for each of the event config json files and runs a batch job per event
+  * [run_data_prep_spice.sh](run_data_prep_spice.sh) - A script for running processing for a single event.
+  * [submit_data_prep_spice.sh](submit_data_prep_spice.sh) - A helper script for running `run_data_prep_spice.sh` through the batch submission system.
+  * [run_interactively.sh](run_interactively.sh) - a helper script to be able to debug code by setting up the same environment as in `submit_data_prep_spice.sh`.
 * There are helper scripts for moving data once it is produced:
-  * [local_output_copy.sh] - A script to copy only the main output files (i.e. not intermediate files) to a target directory from the temporary location to which they were etxracted.
-  * [azureml/copy_to_azure.sh] - A script to upload to Azure storage from the extraction directry
+  * [local_output_copy.sh](local_output_copy.sh) - A script to copy only the main output files (i.e. not intermediate files) to a target directory from the temporary location to which they were etxracted.
+  * [azureml/copy_to_azure.sh](azureml/copy_to_azure.sh) - A script to upload to Azure storage from the extraction directry
 
 #### Additional contents
-* [azureml] - Directory to contain all the code that is specific to data prep on azureml.
-* [dev_notebooks] - Sundry notebooks that were used for development which may have useful code for subsequent reference and development purposes.
+* [azureml](azureml) - Directory to contain all the code that is specific to data prep on azureml.
+* [dev_notebooks](dev_notebooks) - Sundry notebooks that were used for development which may have useful code for subsequent reference and development purposes.
