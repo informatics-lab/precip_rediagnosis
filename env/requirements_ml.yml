@@ -1,9 +1,6 @@
 name: prd_ml
 channels:
-  - conda-main
-  - conda-mo-internal
   - conda-forge
-  - conda-r
 dependencies:
   - tf2onnx
   - pandas
