@@ -19,4 +19,3 @@ dependencies:
   - tensorflow=2.7
   - scikit-learn=1.0
   - xarray=0.19
-prefix: /home/h01/shaddad/.conda/envs/prd_ml
