@@ -1,0 +1,22 @@
+name: prd_ml
+channels:
+  - conda-main
+  - conda-mo-internal
+  - conda-forge
+  - conda-r
+dependencies:
+  - tf2onnx
+  - pandas
+  - matplotlib
+  - tensorboard=2.6
+  - ipykernel
+  - dask-ml
+  - mlflow
+  - python=3.8
+  - jupyterlab
+  - ipywidgets
+  - dask-labextension
+  - tensorflow=2.7
+  - scikit-learn=1.0
+  - xarray=0.19
+prefix: /home/h01/shaddad/.conda/envs/prd_ml

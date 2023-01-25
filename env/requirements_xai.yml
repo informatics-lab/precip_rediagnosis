@@ -1,0 +1,19 @@
+name: prd_xai
+channels:
+  - conda-forge
+dependencies:
+  - tf2onnx
+  - pandas
+  - matplotlib
+  - cartopy=0.20
+  - tensorboard=2.6
+  - ipykernel
+  - dask-ml
+  - mlflow
+  - python=3.8
+  - jupyterlab
+  - ipywidgets
+  - dask-labextension
+  - tensorflow=2.7
+  - scikit-learn=1.0
+  - xarray=0.19
